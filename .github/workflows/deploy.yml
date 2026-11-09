@@ -1,0 +1,62 @@
+name: 산림 데이터 갱신·배포
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # 매시 7분(UTC 기준이지만 매시간이라 KST와 무관). 정각 혼잡을 피한다.
+    - cron: "7 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 직전 스냅샷 내려받기 (API 일시 장애 대비)
+        run: |
+          curl -fsSL "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/live/snapshot.json" \
+            -o "$RUNNER_TEMP/previous.json" || echo "직전 스냅샷 없음"
+
+      - name: 산림청 실시간 데이터 수집
+        env:
+          PUBLIC_SERVICE_KEY: ${{ secrets.PUBLIC_SERVICE_KEY }}
+          PREVIOUS_SNAPSHOT: ${{ runner.temp }}/previous.json
+        run: python scripts/fetch_live.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
