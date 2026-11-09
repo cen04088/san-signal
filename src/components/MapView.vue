@@ -2,6 +2,7 @@
 import { markRaw, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
 import { decodePolyline } from '../lib/polyline.js'
+import { reducedMotion } from '../lib/motion.js'
 
 const props = defineProps({
   mountains: { type: Array, required: true },
@@ -9,13 +10,38 @@ const props = defineProps({
   selectedId: { type: String, default: null },
   trail: { type: Object, default: null },
   userPos: { type: Object, default: null },
+  // 패널에 가려지는 지도 영역(px). 산·등산로는 이 영역을 피해서 보여준다.
+  insets: { type: Object, default: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) },
+  desktop: Boolean,
 })
 const emit = defineEmits(['select'])
 
 // Leaflet SVG 속성에는 CSS 변수를 못 쓰므로 hex로 둔다 (styles.css와 같은 값)
-const COLORS = ['#1f9d55', '#e0a100', '#d9423b']
-const NO_DATA = '#9aa59e'
+const LIGHT = {
+  signal: ['#1f9d55', '#e0a100', '#d9423b'],
+  noData: '#9aa59e',
+  ring: '#ffffff',
+  activeRing: '#15211a',
+  trail: '#1f6b47',
+  risk: '#e07a00',
+  ctrl: '#d9423b',
+  closed: '#6b746e',
+}
+const DARK = {
+  signal: ['#34b46a', '#f0b429', '#ef5b52'],
+  noData: '#6f7a73',
+  ring: '#0f1512',
+  activeRing: '#ffffff',
+  trail: '#5cc48d',
+  risk: '#ff9a2e',
+  ctrl: '#ef5b52',
+  closed: '#98a39c',
+}
 const KOREA = [[33.0, 125.0], [38.7, 129.7]]
+const EDGE = 24 // 가려지는 영역 밖으로 더 띄울 여백
+
+const darkMq = matchMedia('(prefers-color-scheme: dark)')
+let palette = darkMq.matches ? DARK : LIGHT
 
 const el = ref(null)
 let map
@@ -26,19 +52,46 @@ const markers = new Map()
 
 function colorFor(id) {
   const v = props.verdicts[id]
-  if (!v || !v.hasLive) return NO_DATA
-  return COLORS[v.level]
+  if (!v || !v.hasLive) return palette.noData
+  return palette.signal[v.level]
 }
 
 function styleFor(id) {
   const active = id === props.selectedId
   return {
     radius: active ? 11 : 7,
-    color: active ? '#15211a' : '#ffffff',
+    color: active ? palette.activeRing : palette.ring,
     weight: active ? 3 : 2,
     fillColor: colorFor(id),
     fillOpacity: 1,
   }
+}
+
+function fitOptions(maxZoom) {
+  const i = props.insets
+  const size = map.getSize()
+  const tl = [i.left + EDGE, i.top + EDGE]
+  const br = [i.right + EDGE, i.bottom + EDGE]
+  // 가려지는 영역을 빼고 남는 지도가 너무 작으면(창이 아주 작을 때) 그 방향 여백은 무시한다
+  if (size.x - tl[0] - br[0] < 120) tl[0] = br[0] = EDGE
+  if (size.y - tl[1] - br[1] < 120) tl[1] = br[1] = EDGE
+  return { paddingTopLeft: tl, paddingBottomRight: br, maxZoom }
+}
+
+// 지도 영역 크기가 0이면(숨은 탭 등) 맞추지 않고, 크기가 생길 때 맞춘다
+let fitted = false
+function fitInitial() {
+  const size = map.getSize()
+  if (fitted || size.x < 50 || size.y < 50) return
+  fitted = true
+  if (props.selectedId) drawTrail()
+  else map.fitBounds(KOREA, { ...fitOptions(), animate: false })
+}
+
+// 산을 고르거나 목록으로 돌아올 때 지도가 그 자리로 날아간다. 움직임 줄이기 설정이면 바로 바꾼다.
+function moveTo(bounds, maxZoom) {
+  if (reducedMotion()) map.fitBounds(bounds, { ...fitOptions(maxZoom), animate: false })
+  else map.flyToBounds(bounds, { ...fitOptions(maxZoom), duration: 0.6 })
 }
 
 function drawMarkers() {
@@ -61,10 +114,10 @@ function restyle() {
 }
 
 function segmentStyle(s) {
-  if (s.closed) return { color: '#6b746e', weight: 3, dashArray: '4 6', opacity: 0.9 }
-  if (s.ctrl) return { color: '#d9423b', weight: 3, dashArray: '6 5', opacity: 0.95 }
-  if (s.risk) return { color: '#e07a00', weight: 4, opacity: 0.95 }
-  return { color: '#1f6b47', weight: 3, opacity: 0.85 }
+  if (s.closed) return { color: palette.closed, weight: 3, dashArray: '4 6', opacity: 0.9 }
+  if (s.ctrl) return { color: palette.ctrl, weight: 3, dashArray: '6 5', opacity: 0.95 }
+  if (s.risk) return { color: palette.risk, weight: 4, opacity: 0.95 }
+  return { color: palette.trail, weight: 3, opacity: 0.85 }
 }
 
 function escapeHtml(text) {
@@ -78,14 +131,14 @@ function popupFor(s) {
   if (s.up) facts.push(`오르막 ${s.up}분`)
   if (s.dn) facts.push(`내리막 ${s.dn}분`)
   if (facts.length) rows.push(facts.join(' · '))
-  if (s.closed) rows.push('<span style="color:#6b746e">폐쇄 구간</span>')
-  if (s.ctrl) rows.push('<span style="color:#d9423b">통제 구간</span>')
-  if (s.risk) rows.push(`<span style="color:#b35f00">위험: ${escapeHtml(s.risk)}</span>`)
+  if (s.closed) rows.push('<span class="pp closed">폐쇄 구간</span>')
+  if (s.ctrl) rows.push('<span class="pp ctrl">통제 구간</span>')
+  if (s.risk) rows.push(`<span class="pp risk">위험: ${escapeHtml(s.risk)}</span>`)
   if (s.mat) rows.push(`노면: ${escapeHtml(s.mat)}`)
   return rows.join('<br>')
 }
 
-function drawTrail() {
+function drawTrail(fly = true) {
   trailLayer.clearLayers()
   const m = props.mountains.find((x) => x.id === props.selectedId)
   if (!m) return
@@ -99,8 +152,9 @@ function drawTrail() {
       latlngs.forEach((p) => bounds.extend(p))
     }
   }
-  if (segments.length) map.flyToBounds(bounds.pad(0.08), { duration: 0.6, maxZoom: 14 })
-  else map.flyTo([m.lat, m.lng], 12, { duration: 0.6 })
+  if (!fly) return
+  if (segments.length) moveTo(bounds.pad(0.04), 14)
+  else moveTo(L.latLng(m.lat, m.lng).toBounds(7000), 12)
 }
 
 function drawUser() {
@@ -111,33 +165,52 @@ function drawUser() {
   }).bindTooltip('내 위치', { direction: 'top', className: 'mountain-tip' }).addTo(userLayer)
 }
 
+function onScheme() {
+  palette = darkMq.matches ? DARK : LIGHT
+  restyle()
+  if (props.selectedId) drawTrail(false)
+}
+
 let resizeObserver
 onMounted(() => {
-  map = markRaw(L.map(el.value, { zoomControl: false, preferCanvas: false, minZoom: 6, maxBounds: [[31, 122], [40.5, 133]] }))
-  map.fitBounds(KOREA)
-  L.control.zoom({ position: 'topright' }).addTo(map)
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 17,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-  }).addTo(map)
+  map = markRaw(L.map(el.value, {
+    zoomControl: false,
+    attributionControl: false,
+    zoomSnap: 0.5,
+    minZoom: 5,
+    // 시트가 지도 아래 절반을 덮어도 한반도를 위쪽에 맞출 수 있게 넉넉히 잡는다
+    maxBounds: [[18, 108], [48, 146]],
+  }))
+  map.setView([36.2, 127.8], 7) // 크기를 알기 전 임시 위치
+  if (props.desktop) L.control.zoom({ position: 'topright' }).addTo(map)
+  // 휴대폰에서는 시트가 아래를 덮으므로 출처 표시를 위로 올린다
+  L.control.attribution({ position: props.desktop ? 'bottomright' : 'topright', prefix: false })
+    .addAttribution('&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>')
+    .addTo(map)
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 17 }).addTo(map)
   trailLayer = markRaw(L.layerGroup().addTo(map))
   markerLayer = markRaw(L.layerGroup().addTo(map))
   userLayer = markRaw(L.layerGroup().addTo(map))
   drawMarkers()
-  if (props.selectedId) drawTrail()
-  resizeObserver = new ResizeObserver(() => map.invalidateSize())
+  fitInitial()
+  resizeObserver = new ResizeObserver(() => {
+    map.invalidateSize()
+    fitInitial()
+  })
   resizeObserver.observe(el.value)
+  darkMq.addEventListener('change', onScheme)
 })
 
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
+  darkMq.removeEventListener('change', onScheme)
   map?.remove()
 })
 
 watch(() => props.mountains, () => {
   if (!map) return
   drawMarkers()
-  if (props.selectedId) drawTrail() // 주소(#m003)로 바로 들어온 경우
+  if (props.selectedId && fitted) drawTrail() // 주소(#m003)로 바로 들어온 경우
 })
 watch(() => props.verdicts, () => map && restyle())
 watch(() => props.selectedId, (id, old) => {
@@ -146,7 +219,7 @@ watch(() => props.selectedId, (id, old) => {
   if (id) drawTrail()
   else if (old) {
     trailLayer.clearLayers()
-    map.flyToBounds(KOREA, { duration: 0.6 })
+    moveTo(L.latLngBounds(KOREA))
   }
 })
 watch(() => props.trail, () => map && props.selectedId && drawTrail())
@@ -160,10 +233,10 @@ watch(() => props.userPos, () => map && drawUser())
     <span><i class="ln risk" />위험구간</span>
     <span><i class="ln closed" />폐쇄</span>
   </div>
-  <div v-else-if="!selectedId" class="legend">
-    <span><i class="pt" style="background: #1f9d55" />좋음</span>
-    <span><i class="pt" style="background: #e0a100" />주의</span>
-    <span><i class="pt" style="background: #d9423b" />위험</span>
+  <div v-else-if="!selectedId" class="legend" aria-label="신호 범례">
+    <span><i class="pt ok" />좋음</span>
+    <span><i class="pt caution" />주의</span>
+    <span><i class="pt danger" />위험</span>
   </div>
 </template>
 
@@ -173,19 +246,33 @@ watch(() => props.userPos, () => map && drawUser())
   inset: 0;
 }
 
+/* 지도 위 작은 조각: 얇은 재질 */
 .legend {
   position: absolute;
+  top: calc(10px + env(safe-area-inset-top));
   left: 10px;
-  bottom: 22px;
   z-index: 500;
   display: flex;
   gap: 10px;
-  padding: 6px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  background: rgba(255, 255, 255, 0.94);
-  border-radius: 10px;
-  box-shadow: var(--shadow);
+  padding: 6px 11px;
+  font-size: var(--fs-caption);
+  font-weight: 650;
+  letter-spacing: var(--tr-caption);
+  color: var(--ink);
+  background: var(--material-thin);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+}
+
+@media (min-width: 900px) {
+  .legend {
+    top: auto;
+    bottom: 24px;
+    left: calc(var(--panel-w) + var(--gap) * 3);
+  }
 }
 
 .legend span {
@@ -198,21 +285,24 @@ watch(() => props.userPos, () => map && drawUser())
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  border: 2px solid #fff;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px rgba(0, 0, 0, 0.1);
 }
+
+.pt.ok { background: var(--ok); }
+.pt.caution { background: var(--caution); }
+.pt.danger { background: var(--danger); }
 
 .ln {
   width: 18px;
   height: 0;
-  border-top: 3px solid #1f6b47;
+  border-top: 3px solid var(--trail);
 }
 
 .ln.risk {
-  border-top: 4px solid #e07a00;
+  border-top: 4px solid var(--risk);
 }
 
 .ln.closed {
-  border-top: 3px dashed #6b746e;
+  border-top: 3px dashed var(--closed);
 }
 </style>

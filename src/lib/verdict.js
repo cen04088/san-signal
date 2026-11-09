@@ -130,7 +130,7 @@ export function evaluate(m, { snapshot, stationNames, now }) {
     if (fire.stage.level > OK) {
       add(fire.stage.level, `산불위험 '${fire.stage.label}' (${fire.region} 평균 지수 ${fire.mean})`, SOURCES.fire)
     } else if (fire.max >= 66) {
-      add(OK, `일부 지역 산불위험지수가 ${fire.max}까지 올라가요. 화기 소지 금지`, SOURCES.fire)
+      add(OK, `일부 지역은 산불위험지수가 ${fire.max}까지 올라가요. 화기를 가져가지 마세요`, SOURCES.fire)
     }
   }
 
@@ -144,23 +144,23 @@ export function evaluate(m, { snapshot, stationNames, now }) {
   if (w) {
     const feels = windChill(w.t, w.wind)
     w.feels = feels
-    if (w.wind >= 14) add(DANGER, `강풍 ${w.wind.toFixed(1)}m/s — 능선 추락·낙하물 위험`, SOURCES.weather)
-    else if (w.wind >= 8) add(CAUTION, `바람이 강해요 ${w.wind.toFixed(1)}m/s`, SOURCES.weather)
-    else if (w.windMax >= 14) add(CAUTION, `인근 관측소 일부에 강풍 (최대 ${w.windMax.toFixed(1)}m/s)`, SOURCES.weather)
-    if (w.rn >= 10) add(DANGER, `강한 비 ${w.rn}mm — 계곡 물 불어남·미끄럼 위험`, SOURCES.weather)
+    if (w.wind >= 14) add(DANGER, `강풍 ${w.wind.toFixed(1)}m/s, 능선에서 넘어지거나 물건이 떨어질 수 있어요`, SOURCES.weather)
+    else if (w.wind >= 8) add(CAUTION, `바람이 강해요 (${w.wind.toFixed(1)}m/s)`, SOURCES.weather)
+    else if (w.windMax >= 14) add(CAUTION, `근처 관측소 일부에 강풍 (최대 ${w.windMax.toFixed(1)}m/s)`, SOURCES.weather)
+    if (w.rn >= 10) add(DANGER, `강한 비 ${w.rn}mm, 계곡이 불어나고 길이 미끄러워요`, SOURCES.weather)
     else if (w.rn > 0) add(CAUTION, `비가 오고 있어요 (${w.rn}mm)`, SOURCES.weather)
-    else if (w.rnMax >= 10) add(CAUTION, `인근 관측소 일부에 강한 비 (최대 ${w.rnMax}mm)`, SOURCES.weather)
-    else if (w.rnMax > 0) add(OK, `인근 관측소 일부에 약한 비 (최대 ${w.rnMax}mm)`, SOURCES.weather)
-    if (feels != null && feels <= -25) add(DANGER, `체감온도 ${feels.toFixed(0)}℃ — 저체온증 위험`, SOURCES.weather)
-    else if (feels != null && feels <= -10) add(CAUTION, `체감온도 ${feels.toFixed(0)}℃ — 방한 장비 필수`, SOURCES.weather)
-    else if (w.t != null && w.t <= 0 && (w.rn > 0 || w.hm >= 95)) add(CAUTION, `영하·높은 습도 — 노면 결빙 가능`, SOURCES.weather)
-    if (w.t >= 35) add(DANGER, `기온 ${w.t.toFixed(0)}℃ — 열사병 위험`, SOURCES.weather)
-    else if (w.t >= 33) add(CAUTION, `기온 ${w.t.toFixed(0)}℃ — 폭염 수준`, SOURCES.weather)
+    else if (w.rnMax >= 10) add(CAUTION, `근처 관측소 일부에 강한 비 (최대 ${w.rnMax}mm)`, SOURCES.weather)
+    else if (w.rnMax > 0) add(OK, `근처 관측소 일부에 약한 비 (최대 ${w.rnMax}mm)`, SOURCES.weather)
+    if (feels != null && feels <= -25) add(DANGER, `체감온도 ${feels.toFixed(0)}℃, 저체온증 위험`, SOURCES.weather)
+    else if (feels != null && feels <= -10) add(CAUTION, `체감온도 ${feels.toFixed(0)}℃, 방한 장비를 챙기세요`, SOURCES.weather)
+    else if (w.t != null && w.t <= 0 && (w.rn > 0 || w.hm >= 95)) add(CAUTION, `영하에 습도가 높아 길이 얼 수 있어요`, SOURCES.weather)
+    if (w.t >= 35) add(DANGER, `기온 ${w.t.toFixed(0)}℃, 열사병 위험`, SOURCES.weather)
+    else if (w.t >= 33) add(CAUTION, `기온 ${w.t.toFixed(0)}℃, 폭염 수준`, SOURCES.weather)
   }
 
   const sun = sunFor(m, now)
   if (!sun.night) {
-    if (sun.minutesLeft < 30) add(DANGER, `해 지기까지 ${sun.minutesLeft}분 — 지금 입산은 위험`, SOURCES.sun)
+    if (sun.minutesLeft < 30) add(DANGER, `해 지기까지 ${sun.minutesLeft}분, 지금 오르면 어두워진 뒤에 내려와요`, SOURCES.sun)
     else if (now > sun.latestStart) {
       add(CAUTION, `지금 출발하면 하산 전에 해가 질 수 있어요 (일반 코스 ${hoursText(sun.walk)}시간 기준)`, SOURCES.sun)
     }
@@ -175,7 +175,7 @@ export function evaluate(m, { snapshot, stationNames, now }) {
 export function headline(v) {
   const top = v.reasons.find((r) => r.level === v.level && r.level > OK)
   if (top) return top.text
-  if (v.sun.night) return '위험 신호 없음 · 지금은 해가 진 시간'
+  if (v.sun.night) return '위험 신호 없음, 지금은 해가 진 시간'
   return '산불·산사태·기상 위험 신호 없음'
 }
 

@@ -69,10 +69,6 @@ watch(() => props.userPos, (pos) => {
   <div class="list-view">
     <section class="hero">
       <h1>오늘, 이 산 가도 될까?</h1>
-      <p>
-        산림청 <b>산불위험예보 · 산사태예측 · 산악기상</b> 실시간 데이터와 <b>등산로</b> 공간정보를 묶어
-        전국 {{ mountains.length || 138 }}개 산의 산행 안전을 신호등으로 알려드려요.
-      </p>
       <div class="tally" role="group" aria-label="신호별로 보기">
         <button
           v-for="(meta, level) in LEVEL_META"
@@ -87,7 +83,11 @@ watch(() => props.userPos, (pos) => {
         </button>
       </div>
       <p v-if="night" class="night">
-        지금은 해가 진 시간이에요. 신호등은 산불·산사태·기상만 반영해요 — 일출 {{ hhmm(nextSunrise) }} 이후 출발하세요.
+        지금은 해가 진 시간이라 일몰 항목은 빼고 판정했어요. 일출 {{ hhmm(nextSunrise) }} 이후에 출발하세요.
+      </p>
+      <p class="lead">
+        산림청 산불위험예보, 산사태예측, 산악기상 관측값을 매시간 받아
+        전국 {{ mountains.length || 138 }}개 산을 좋음·주의·위험으로 나눠요.
       </p>
     </section>
 
@@ -95,20 +95,21 @@ watch(() => props.userPos, (pos) => {
       <input
         v-model="query"
         type="search"
-        placeholder="산 이름이나 지역 검색 (예: 북한산, 가평)"
+        enterkeyhint="search"
+        placeholder="산 이름이나 지역 (예: 북한산, 가평)"
         aria-label="산 검색"
       />
       <div class="chips">
-        <button type="button" :class="{ on: filter === 'np' }" @click="toggleFilter('np')">국립공원</button>
-        <button type="button" :class="{ on: sort === 'signal' }" @click="sort = 'signal'">위험 먼저</button>
-        <button type="button" :class="{ on: sort === 'name' }" @click="sort = 'name'">가나다</button>
-        <button type="button" :class="{ on: sort === 'near' }" @click="userPos ? (sort = 'near') : nearMe()">
-          {{ locating ? '위치 확인 중…' : '내 주변' }}
+        <button type="button" :class="{ on: filter === 'np' }" :aria-pressed="filter === 'np'" @click="toggleFilter('np')">국립공원</button>
+        <button type="button" :class="{ on: sort === 'signal' }" :aria-pressed="sort === 'signal'" @click="sort = 'signal'">위험 먼저</button>
+        <button type="button" :class="{ on: sort === 'name' }" :aria-pressed="sort === 'name'" @click="sort = 'name'">가나다</button>
+        <button type="button" :class="{ on: sort === 'near' }" :aria-pressed="sort === 'near'" @click="userPos ? (sort = 'near') : nearMe()">
+          {{ locating ? '위치 확인 중' : '내 주변' }}
         </button>
       </div>
     </div>
 
-    <p v-if="loading" class="empty">불러오는 중…</p>
+    <p v-if="loading" class="empty">불러오는 중</p>
     <p v-else-if="!rows.length" class="empty">조건에 맞는 산이 없어요.</p>
 
     <ul class="rows">
@@ -132,12 +133,12 @@ watch(() => props.userPos, (pos) => {
 
     <footer class="foot">
       <p>
-        활용 데이터: 산림청 국립산림과학원 산불위험예보정보 · 산림청 산사태예측정보 · 산림청 국립산림과학원 산악기상정보 ·
-        산림청 산정보 서비스 · 산림청 등산로(산림공간정보). 각 데이터의 이용조건에 따라 출처를 표시합니다.
+        데이터 출처: 산림청 국립산림과학원 산불위험예보정보, 산림청 산사태예측정보, 산림청 국립산림과학원 산악기상정보,
+        산림청 산정보 서비스, 산림청 등산로(1:25,000) 공간정보. 지도는 OpenStreetMap.
       </p>
       <p>
-        신호등은 참고 정보예요. 현장 통제·기상 특보를 우선 확인하세요. 응급 상황은 <b>119</b>.
-        · <a href="https://github.com/cen04088/san-signal" target="_blank" rel="noopener">소스 코드</a>
+        신호등은 참고용이에요. 입산 통제나 기상 특보가 있으면 그 안내를 따르세요. 응급 상황에는 <b>119</b>에 전화하세요.
+        <a href="https://github.com/cen04088/san-signal" target="_blank" rel="noopener">소스 코드</a>
       </p>
     </footer>
   </div>
@@ -145,21 +146,11 @@ watch(() => props.userPos, (pos) => {
 
 <style scoped>
 .hero h1 {
-  margin: 2px 0 6px;
-  font-size: 24px;
-  letter-spacing: -0.03em;
-}
-
-.hero p {
-  margin: 0 0 14px;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--ink-2);
-}
-
-.hero b {
-  color: var(--ink);
-  font-weight: 650;
+  margin: 4px 0 12px;
+  font-size: var(--fs-title);
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: var(--tr-title);
 }
 
 .tally {
@@ -172,61 +163,85 @@ watch(() => props.userPos, (pos) => {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
-  padding: 10px 12px;
+  gap: 1px;
+  padding: 10px 12px 9px;
   border-radius: var(--radius);
-  border: 2px solid transparent;
+  border: 0;
+  box-shadow: inset 0 0 0 2px transparent;
   text-align: left;
+  transition: var(--press), box-shadow 120ms ease;
+}
+
+.tally-btn:active {
+  transform: scale(0.97);
 }
 
 .tally-btn .n {
-  font-size: 24px;
+  font-size: var(--fs-title);
   font-weight: 750;
+  letter-spacing: var(--tr-title);
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
 }
 
 .tally-btn .l {
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: var(--fs-caption);
+  font-weight: 650;
+  letter-spacing: var(--tr-caption);
 }
 
-.tally-btn.ok { background: var(--ok-bg); color: #10613a; }
-.tally-btn.caution { background: var(--caution-bg); color: #6b4e00; }
-.tally-btn.danger { background: var(--danger-bg); color: #8a201b; }
-.tally-btn.on { border-color: currentColor; }
+.tally-btn.ok { background: var(--ok-bg); color: var(--ok-ink); }
+.tally-btn.caution { background: var(--caution-bg); color: var(--caution-ink); }
+.tally-btn.danger { background: var(--danger-bg); color: var(--danger-ink); }
+.tally-btn.on { box-shadow: inset 0 0 0 2px currentColor; }
 
 .night {
-  margin: 12px 0 0 !important;
+  margin: 10px 0 0;
   padding: 9px 12px;
-  border-radius: 10px;
-  background: #e6ebf3;
-  color: #2a3a55 !important;
-  font-size: 13px !important;
+  border-radius: 12px;
+  background: var(--night-bg);
+  color: var(--night-ink);
+  font-size: var(--fs-callout);
+  line-height: 1.5;
 }
 
+.lead {
+  margin: 12px 0 0;
+  font-size: var(--fs-callout);
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+/* 내용이 이 줄 밑으로 흐려지며 지나간다 (구분선 대신) */
 .tools {
   position: sticky;
-  top: 54px;
+  top: 0;
   z-index: 3;
-  margin: 16px -16px 6px;
-  padding: 8px 16px;
-  background: var(--bg);
+  margin: 14px calc(-1 * var(--pad)) 4px;
+  padding: 8px var(--pad);
+  background: var(--material);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
 }
 
 .tools input {
   width: 100%;
-  padding: 11px 14px;
-  border: 1px solid var(--line);
+  padding: 10px 14px;
+  border: 0;
   border-radius: 12px;
   background: var(--surface);
-  font-size: 15px;
+  box-shadow: 0 0 0 1px var(--line);
+  font-size: 1rem; /* 16px 미만이면 iOS가 입력할 때 화면을 확대한다 */
   outline: none;
+  transition: box-shadow 120ms ease;
+}
+
+.tools input::placeholder {
+  color: var(--ink-3);
 }
 
 .tools input:focus {
-  border-color: var(--brand);
-  box-shadow: 0 0 0 3px rgba(31, 107, 71, 0.15);
+  box-shadow: 0 0 0 2px var(--brand);
 }
 
 .chips {
@@ -234,27 +249,39 @@ watch(() => props.userPos, (pos) => {
   gap: 6px;
   margin-top: 8px;
   overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
 }
 
 .chips button {
   flex: none;
-  padding: 6px 11px;
+  padding: 6px 12px;
   border-radius: 999px;
-  border: 1px solid var(--line);
+  border: 0;
   background: var(--surface);
-  font-size: 13px;
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: var(--fs-callout);
+  font-weight: 550;
   color: var(--ink-2);
+  transition: var(--press), background-color 120ms ease, color 120ms ease;
+}
+
+.chips button:active {
+  transform: scale(0.95);
 }
 
 .chips button.on {
   background: var(--ink);
-  border-color: var(--ink);
-  color: #fff;
+  box-shadow: none;
+  color: var(--on-ink);
 }
 
 .empty {
   color: var(--ink-3);
-  font-size: 14px;
+  font-size: var(--fs-body);
   text-align: center;
   padding: 24px 0;
 }
@@ -274,19 +301,23 @@ watch(() => props.userPos, (pos) => {
   align-items: flex-start;
   gap: 12px;
   padding: 12px 14px;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: var(--radius);
   background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line);
   text-align: left;
-  transition: border-color 0.15s, transform 0.15s;
+  transition: var(--press), box-shadow 120ms ease;
 }
 
-.row:hover {
-  border-color: #c5cfc7;
-}
-
+/* 넓은 면은 덜 줄어든다 */
 .row:active {
-  transform: scale(0.99);
+  transform: scale(0.985);
+}
+
+@media (hover: hover) {
+  .row:hover {
+    box-shadow: 0 0 0 1px var(--ink-3);
+  }
 }
 
 .sig {
@@ -301,20 +332,21 @@ watch(() => props.userPos, (pos) => {
 .sig.ok { background: var(--ok); box-shadow: 0 0 0 4px var(--ok-bg); }
 .sig.caution { background: var(--caution); box-shadow: 0 0 0 4px var(--caution-bg); }
 .sig.danger { background: var(--danger); box-shadow: 0 0 0 4px var(--danger-bg); }
-.sig.none { background: #9aa59e; }
+.sig.none { background: var(--ink-3); }
 
 .main {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .name {
-  font-size: 16px;
+  font-size: var(--fs-headline);
   font-weight: 700;
-  letter-spacing: -0.02em;
+  line-height: 1.35;
+  letter-spacing: var(--tr-headline);
 }
 
 .name em {
@@ -322,54 +354,50 @@ watch(() => props.userPos, (pos) => {
   padding: 1px 6px;
   border-radius: 6px;
   background: var(--surface-2);
-  border: 1px solid var(--line);
-  font-size: 11px;
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: var(--fs-footnote);
   font-style: normal;
   font-weight: 600;
+  letter-spacing: var(--tr-footnote);
   color: var(--ink-2);
   vertical-align: 2px;
 }
 
 .sub {
-  font-size: 12.5px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--tr-caption);
   color: var(--ink-3);
 }
 
 .why {
   margin-top: 3px;
-  font-size: 13px;
+  font-size: var(--fs-callout);
+  line-height: 1.45;
   color: var(--ink-2);
 }
 
-.why.caution { color: #8a6400; }
-.why.danger { color: #b2302a; font-weight: 600; }
+.why.caution { color: var(--caution-text); }
+.why.danger { color: var(--danger-text); font-weight: 600; }
 
 .elev {
   flex: none;
-  font-size: 12.5px;
+  margin-top: 3px;
+  font-size: var(--fs-caption);
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
-  margin-top: 3px;
 }
 
 .foot {
   margin-top: 28px;
   padding-top: 16px;
   border-top: 1px solid var(--line);
-  font-size: 12px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--tr-caption);
   line-height: 1.6;
   color: var(--ink-3);
 }
 
 .foot p {
   margin: 0 0 8px;
-}
-
-@media (min-width: 900px) {
-  .tools {
-    top: -18px;
-    margin: 16px -20px 6px;
-    padding: 10px 20px;
-  }
 }
 </style>

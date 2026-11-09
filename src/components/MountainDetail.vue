@@ -20,6 +20,15 @@ const walkText = computed(() => {
   return b && b !== a ? `일반 코스 ${hoursText(a)}~${hoursText(b)}시간` : `일반 코스 약 ${hoursText(a)}시간`
 })
 
+// 판정에 실제로 쓴 데이터 이름. 빠진 데이터가 있으면 함께 알린다.
+const basis = computed(() => {
+  const used = [['산불위험', v.value.fire], ['산사태', v.value.slide], ['산악기상', v.value.weather]]
+  const have = used.filter(([, x]) => x).map(([name]) => name)
+  const miss = used.filter(([, x]) => !x).map(([name]) => name)
+  if (!have.length) return '실시간 자료를 받지 못했어요'
+  return `${have.join('·')} 기준` + (miss.length ? ` (${miss.join('·')} 자료 없음)` : '')
+})
+
 const fireTile = computed(() => {
   const f = v.value.fire
   if (!f) return { state: 'none', value: '자료 없음', note: '' }
@@ -52,14 +61,14 @@ const slideTile = computed(() => {
 
 const weatherTile = computed(() => {
   const w = v.value.weather
-  if (!w) return { state: 'none', value: '자료 없음', note: '인근 산악기상관측소가 없어요' }
+  if (!w) return { state: 'none', value: '자료 없음', note: '가까운 산악기상관측소가 없어요' }
   const worst = v.value.reasons.filter((r) => r.source.includes('산악기상')).reduce((x, r) => Math.max(x, r.level), OK)
   const parts = []
   if (w.feels != null && w.t != null && Math.abs(w.feels - w.t) >= 1) parts.push(`체감 ${w.feels.toFixed(0)}℃`)
   if (w.wind != null) parts.push(`바람 ${w.wind.toFixed(1)}m/s`)
   if (w.hm != null) parts.push(`습도 ${Math.round(w.hm)}%`)
   if (w.rn > 0) parts.push(`강수 ${w.rn}mm`)
-  const how = w.how === 'name' ? '' : w.how === 'nearby' ? ' (인근 지역)' : ''
+  const how = w.how === 'nearby' ? ' (인근 지역)' : ''
   return {
     state: ['ok', 'caution', 'danger'][worst],
     value: w.t != null ? `${w.t.toFixed(1)}℃` : '-',
@@ -78,7 +87,7 @@ const sunTile = computed(() => {
     state: late,
     value: `일몰 ${hhmm(s.sunset)}`,
     note: `늦어도 ${hhmm(s.latestStart)}까지 출발`,
-    foot: `일반 코스 왕복 ${hoursText(s.walk)}시간 + 여유 30분 기준`,
+    foot: `일반 코스 왕복 ${hoursText(s.walk)}시간에 30분을 더한 기준`,
   }
 })
 
@@ -104,7 +113,12 @@ const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
 
 <template>
   <article class="detail">
-    <button type="button" class="back" @click="emit('back')">← 전체 산 목록</button>
+    <button type="button" class="back" @click="emit('back')">
+      <svg viewBox="0 0 12 20" width="9" height="15" aria-hidden="true">
+        <path d="M10 2 2 10l8 8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      전체 산
+    </button>
 
     <header class="head">
       <h1>
@@ -116,15 +130,15 @@ const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
       </p>
     </header>
 
-    <section class="signal" :class="meta.key" :aria-label="`산행 신호 ${meta.label}`">
+    <section class="signal" :class="v.hasLive ? meta.key : 'none'" :aria-label="`산행 신호 ${v.hasLive ? meta.label : '자료 없음'}`">
       <div class="lights" aria-hidden="true">
-        <i class="r" :class="{ on: v.level === 2 }" />
-        <i class="y" :class="{ on: v.level === 1 }" />
-        <i class="g" :class="{ on: v.level === 0 }" />
+        <i class="r" :class="{ on: v.hasLive && v.level === 2 }" />
+        <i class="y" :class="{ on: v.hasLive && v.level === 1 }" />
+        <i class="g" :class="{ on: v.hasLive && v.level === 0 }" />
       </div>
       <div class="msg">
         <strong>{{ v.hasLive ? meta.title : '실시간 자료가 없어요' }}</strong>
-        <span>산림청 실시간 데이터 {{ [v.fire, v.slide, v.weather].filter(Boolean).length }}종을 함께 봤어요</span>
+        <span>{{ basis }}</span>
       </div>
     </section>
 
@@ -135,7 +149,7 @@ const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
       </li>
     </ul>
     <p class="calm" v-else-if="v.hasLive">
-      지금은 산불·산사태·기상 위험 신호가 없어요. 그래도 물·간식·보온 옷은 챙기세요.
+      지금은 산불·산사태·기상 위험 신호가 없어요. 그래도 물과 간식, 보온 옷은 챙기세요.
     </p>
 
     <section class="tiles">
@@ -162,7 +176,7 @@ const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
             <span>{{ text }}</span><small>{{ n }}구간</small>
           </li>
         </ul>
-        <p class="hint">지도에서 등산로 선을 누르면 구간 이름·소요 시간·위험 정보가 보여요.</p>
+        <p class="hint">지도에서 등산로 선을 누르면 구간 이름, 소요 시간, 위험 정보가 나와요.</p>
         <p class="src-line">산림청 등산로(1:25,000) 공간정보<template v-if="trailDate"> · 자료 기준일 {{ trailDate }}</template></p>
       </template>
       <p v-else class="hint">산림청 등산로 공간정보에 이 산의 등산로가 아직 없어요.</p>
@@ -176,25 +190,38 @@ const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
     </section>
 
     <p class="disclaimer">
-      신호등은 공공데이터를 바탕으로 한 참고 정보예요. 입산 통제·기상 특보 등 현장 안내를 우선 따르세요. 응급 상황은 119.
+      신호등은 참고용이에요. 입산 통제나 기상 특보가 있으면 그 안내를 따르세요. 응급 상황에는 119에 전화하세요.
     </p>
   </article>
 </template>
 
 <style scoped>
 .back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: -4px;
+  padding: 6px 10px 6px 6px;
   border: 0;
+  border-radius: 10px;
   background: none;
-  padding: 4px 0;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--fs-body);
+  font-weight: 650;
   color: var(--brand);
+  transition: var(--press), background-color 120ms ease;
+}
+
+.back:active {
+  transform: scale(0.96);
+  background: var(--surface);
 }
 
 .head h1 {
-  margin: 8px 0 4px;
-  font-size: 28px;
-  letter-spacing: -0.03em;
+  margin: 6px 0 4px;
+  font-size: var(--fs-large);
+  font-weight: 750;
+  line-height: 1.15;
+  letter-spacing: var(--tr-large);
 }
 
 .head h1 em {
@@ -202,17 +229,18 @@ const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
   padding: 2px 8px;
   border-radius: 8px;
   background: var(--surface);
-  border: 1px solid var(--line);
-  font-size: 12px;
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: var(--fs-caption);
   font-style: normal;
   font-weight: 600;
+  letter-spacing: var(--tr-caption);
   color: var(--ink-2);
   vertical-align: 5px;
 }
 
 .head p {
   margin: 0 0 16px;
-  font-size: 14px;
+  font-size: var(--fs-body);
   color: var(--ink-2);
 }
 
@@ -221,7 +249,8 @@ const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
   align-items: center;
   gap: 16px;
   padding: 16px;
-  border-radius: 18px;
+  border-radius: 20px;
+  background: var(--surface-2);
 }
 
 .signal.ok { background: var(--ok-bg); }
@@ -229,11 +258,13 @@ const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
 .signal.danger { background: var(--danger-bg); }
 
 .lights {
+  flex: none;
   display: flex;
   gap: 6px;
   padding: 8px 10px;
   border-radius: 999px;
-  background: var(--ink);
+  background: var(--housing);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .lights i {
@@ -243,32 +274,44 @@ const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
   opacity: 0.18;
 }
 
-.lights .r { background: var(--danger); }
-.lights .y { background: var(--caution); }
-.lights .g { background: var(--ok); }
+.lights .r { background: var(--danger); color: var(--danger); }
+.lights .y { background: var(--caution); color: var(--caution); }
+.lights .g { background: var(--ok); color: var(--ok); }
 
 .lights i.on {
   opacity: 1;
-  box-shadow: 0 0 12px 2px currentColor;
+  box-shadow: 0 0 14px 1px currentColor;
+  animation: lamp-on 420ms ease-out;
 }
 
-.lights .r.on { color: rgba(217, 66, 59, 0.7); }
-.lights .y.on { color: rgba(224, 161, 0, 0.7); }
-.lights .g.on { color: rgba(31, 157, 85, 0.7); }
+@keyframes lamp-on {
+  from {
+    opacity: 0.18;
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
 
 .msg {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
+  min-width: 0;
 }
 
 .msg strong {
-  font-size: 19px;
-  letter-spacing: -0.02em;
+  font-size: var(--fs-title2);
+  font-weight: 750;
+  line-height: 1.3;
+  letter-spacing: var(--tr-title2);
 }
 
+.signal.ok .msg strong { color: var(--ok-ink); }
+.signal.caution .msg strong { color: var(--caution-ink); }
+.signal.danger .msg strong { color: var(--danger-ink); }
+
 .msg span {
-  font-size: 12.5px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--tr-caption);
   color: var(--ink-2);
 }
 
@@ -288,26 +331,28 @@ const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
   padding: 10px 12px 10px 14px;
   border-radius: 12px;
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--ok);
+  box-shadow: inset 4px 0 0 var(--ok), inset 0 0 0 1px var(--line);
 }
 
-.reasons li.caution { border-left-color: var(--caution); }
-.reasons li.danger { border-left-color: var(--danger); }
+.reasons li.caution { box-shadow: inset 4px 0 0 var(--caution), inset 0 0 0 1px var(--line); }
+.reasons li.danger { box-shadow: inset 4px 0 0 var(--danger), inset 0 0 0 1px var(--line); }
 
 .reasons .txt {
-  font-size: 14.5px;
-  font-weight: 600;
+  font-size: var(--fs-body);
+  font-weight: 650;
+  line-height: 1.45;
 }
 
 .reasons .src {
-  font-size: 11.5px;
+  font-size: var(--fs-footnote);
+  letter-spacing: var(--tr-footnote);
   color: var(--ink-3);
 }
 
 .calm {
   margin: 12px 0 0;
-  font-size: 14px;
+  font-size: var(--fs-body);
+  line-height: 1.6;
   color: var(--ink-2);
 }
 
@@ -323,10 +368,10 @@ const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 12px 12px 10px;
+  padding: 13px 12px 10px;
   border-radius: var(--radius);
   background: var(--surface);
-  border: 1px solid var(--line);
+  box-shadow: 0 0 0 1px var(--line);
   overflow: hidden;
 }
 
@@ -341,31 +386,37 @@ const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
 .tile.ok::before { background: var(--ok); }
 .tile.caution::before { background: var(--caution); }
 .tile.danger::before { background: var(--danger); }
-.tile.night::before { background: #5b6f94; }
+.tile.night::before { background: var(--night); }
 
 .t-title {
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: var(--fs-caption);
+  font-weight: 650;
+  letter-spacing: var(--tr-caption);
   color: var(--ink-2);
 }
 
 .t-value {
-  font-size: 20px;
-  letter-spacing: -0.02em;
+  font-size: var(--fs-title2);
+  font-weight: 750;
+  line-height: 1.3;
+  letter-spacing: var(--tr-title2);
+  font-variant-numeric: tabular-nums;
 }
 
-.tile.caution .t-value { color: #8a6400; }
-.tile.danger .t-value { color: #b2302a; }
+.tile.caution .t-value { color: var(--caution-text); }
+.tile.danger .t-value { color: var(--danger-text); }
 
 .t-note {
-  font-size: 12.5px;
-  color: var(--ink-2);
+  font-size: var(--fs-caption);
   line-height: 1.45;
+  color: var(--ink-2);
 }
 
 .t-foot,
 .t-src {
-  font-size: 11px;
+  font-size: var(--fs-footnote);
+  letter-spacing: var(--tr-footnote);
+  line-height: 1.4;
   color: var(--ink-3);
 }
 
@@ -374,19 +425,22 @@ const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
 }
 
 .block {
-  margin-top: 24px;
+  margin-top: 26px;
 }
 
 .block h2 {
   margin: 0 0 8px;
-  font-size: 17px;
-  letter-spacing: -0.02em;
+  font-size: var(--fs-title2);
+  font-weight: 750;
+  line-height: 1.3;
+  letter-spacing: var(--tr-title2);
 }
 
 .trail-sum {
   margin: 0 0 8px;
-  font-size: 14px;
+  font-size: var(--fs-body);
   color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
 }
 
 .trail-sum b {
@@ -394,7 +448,7 @@ const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
 }
 
 .trail-sum b.warn {
-  color: #b35f00;
+  color: var(--warn-text);
 }
 
 .risks {
@@ -410,40 +464,44 @@ const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 8px 11px;
   border-radius: 10px;
-  background: #fff4e5;
-  font-size: 13px;
-  color: #6b3d00;
+  background: var(--risk-bg);
+  font-size: var(--fs-callout);
+  color: var(--risk-ink);
 }
 
 .risks small {
   flex: none;
-  color: #9a6a2a;
+  font-size: var(--fs-caption);
+  color: var(--risk-ink-2);
+  font-variant-numeric: tabular-nums;
 }
 
 .hint {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fs-callout);
+  line-height: 1.5;
   color: var(--ink-3);
 }
 
 .src-line {
   margin: 6px 0 0;
-  font-size: 11.5px;
+  font-size: var(--fs-footnote);
+  letter-spacing: var(--tr-footnote);
   color: var(--ink-3);
 }
 
 .top {
   margin: 0 0 8px;
-  font-size: 14px;
+  font-size: var(--fs-body);
   font-weight: 600;
   line-height: 1.6;
 }
 
 .desc {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--fs-body);
   line-height: 1.75;
   color: var(--ink-2);
 }
@@ -452,7 +510,8 @@ const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
   margin-top: 28px;
   padding-top: 14px;
   border-top: 1px solid var(--line);
-  font-size: 12px;
+  font-size: var(--fs-caption);
+  letter-spacing: var(--tr-caption);
   line-height: 1.6;
   color: var(--ink-3);
 }
