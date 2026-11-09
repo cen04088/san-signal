@@ -182,11 +182,10 @@ const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
       <p v-else class="hint">산림청 등산로 공간정보에 이 산의 등산로가 아직 없어요.</p>
     </section>
 
-    <section class="block" v-if="m.description || m.top">
+    <section class="block" v-if="m.description">
       <h2>산 소개</h2>
-      <p class="top" v-if="m.top">{{ m.top }}</p>
-      <p class="desc" v-if="m.description">{{ m.description }}</p>
-      <p class="src-line">산림청 산정보 서비스</p>
+      <p class="desc">{{ m.description }}</p>
+      <p class="src-line">{{ m.description_source === 'olla' ? '이전 프로젝트(올라)에서 정리한 자료' : '산림청 산정보 서비스' }}</p>
     </section>
 
     <p class="disclaimer">
@@ -490,13 +489,6 @@ const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
   font-size: var(--fs-footnote);
   letter-spacing: var(--tr-footnote);
   color: var(--ink-3);
-}
-
-.top {
-  margin: 0 0 8px;
-  font-size: var(--fs-body);
-  font-weight: 600;
-  line-height: 1.6;
 }
 
 .desc {

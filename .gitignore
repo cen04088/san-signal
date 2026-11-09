@@ -7,3 +7,4 @@ public/live/
 __pycache__/
 scripts/match_report.txt
 .DS_Store
+scripts/.cache/

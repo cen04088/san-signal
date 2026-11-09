@@ -8,6 +8,9 @@
 
 사용법
   PUBLIC_SERVICE_KEY=... python scripts/build_mountains.py <forest>/backend/recommendations/mountain_data.py
+  python scripts/build_trails.py <WG_MT_WAY 폴더>   # 등산로 통계를 다시 붙인다
+
+산정보 응답은 scripts/.cache/info/에 저장해 두고 다시 쓴다 (지우면 새로 받는다).
 """
 import math
 import re
@@ -15,11 +18,15 @@ import runpy
 import sys
 import time
 from collections import Counter
+from pathlib import Path
 
 from common import (
     FIRE_SIGUNGU_URL, MOUNTAIN_INFO_URL, MOUNTAIN_WEATHER_URL, PUBLIC_DATA,
     fetch_items, fetch_text, now_kst, parse_address, region_key, sido_short, write_json,
 )
+from descriptions import load_fixes, pick
+
+INFO_CACHE = Path(__file__).with_name(".cache") / "info"
 
 METRO = {"서울", "부산", "대구", "인천", "대전", "울산", "세종"}
 NOT_MOUNTAIN = {"한려해상", "다도해해상", "태안해안", "변산반도"}  # 해상·해안 국립공원은 제외
@@ -67,6 +74,32 @@ REGION_OVERRIDES = {
     "대야산": ["경북 문경시", "충북 괴산군"],
     "두타산": ["강원 동해시", "강원 삼척시"],
 }
+
+# 올라 산 목록의 지역이 좌표와 맞지 않던 산 (docs/description-audit.md 7번). 화면의 지역 표시도 바꾼다.
+REGION_FIXES = {
+    "달음산": ["부산 기장군"],                       # 좌표 35.31N 129.21E는 기장군 일광·정관
+    "방장산": ["전북 고창군", "전남 장성군", "전북 정읍시"],  # 정상이 고창·장성 경계
+    "제암산": ["전남 장흥군", "전남 보성군"],
+    "삼봉산": ["경남 함양군", "전북 남원시"],           # 좌표 35.45N 127.67E는 함양 마천 (1,187m)
+    "유명산": ["경기 가평군", "경기 양평군"],           # 가평·양평 경계. 양평 산정보 레코드에 산 소개가 있다
+}
+REGION_OVERRIDES.update(REGION_FIXES)
+
+# 올라 산 목록의 내부 이름 → 화면 이름. 산정보 검색도 화면 이름으로 한다.
+DISPLAY_NAMES = {"봉화청량산": "청량산", "서산가야산": "가야산", "문경황장산": "황장산"}
+
+# 올라 산 목록의 높이 오류
+ELEVATION_FIXES = {
+    "덕유산": 1614,  # 최고봉 향적봉. 1,507m는 남덕유산 높이
+    "예봉산": 683,   # 683.2m. 638은 자리가 뒤바뀐 값
+    "축령산": 886,   # 남양주 축령산. 622m는 장성 축령산 높이
+    "산방산": 395,   # 산정보 395m. 507m는 근거를 찾지 못함
+}
+
+# 국립공원 구역 안에 있는데 표시가 빠졌던 산
+NATIONAL_PARK = {
+    "도봉산", "남덕유산", "대야산", "도락산", "금수산", "문경황장산", "입암산", "팔영산", "노인봉", "점봉산", "제비봉",
+}
 NEAREST_STATION_KM = 25
 
 
@@ -87,12 +120,20 @@ def station_list():
 
 def mountain_info_records(name):
     """산정보 서비스에서 이 산에 해당하는 레코드(지자체별로 여러 건일 수 있음)."""
-    text = fetch_text(MOUNTAIN_INFO_URL, {"pageNo": 1, "numOfRows": 50, "searchWrd": name})
+    cache = INFO_CACHE / f"{name}.xml"
+    if cache.exists():
+        text = cache.read_text(encoding="utf-8")
+    else:
+        text = fetch_text(MOUNTAIN_INFO_URL, {"pageNo": 1, "numOfRows": 50, "searchWrd": name})
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(text, encoding="utf-8")
+        time.sleep(0.15)
     records = []
     for raw in re.findall(r"<item>(.*?)</item>", text, re.S):
         fields = {k: v.strip() for k, v in re.findall(r"<(\w+)>(.*?)</\1>", raw, re.S)}
         title = fields.get("mntiname", "")
         if title == name or title.startswith(name + "_") or title.startswith(name + "("):
+            fields["_region"] = parse_address(fields.get("mntiadd"))
             records.append(fields)
     return records
 
@@ -124,21 +165,16 @@ def haversine_km(a, b):
 
 
 def parse_regions(text):
-    regions = []
+    """'전남 보성군·장흥군'처럼 뒤쪽에 시도가 빠진 경우 앞의 시도를 이어 쓴다."""
+    regions, sido = [], None
     for part in re.split(r"[·,/]", text or ""):
         tokens = part.split()
         if len(tokens) >= 2:
-            regions.append(f"{sido_short(tokens[0])} {tokens[1]}")
+            sido = sido_short(tokens[0])
+            regions.append(f"{sido} {tokens[1]}")
+        elif len(tokens) == 1 and sido:
+            regions.append(f"{sido} {tokens[0]}")
     return regions
-
-
-def clean_text(text, limit=420):
-    text = re.sub(r"<[^>]+>|&[a-z]+;", " ", text or "")
-    text = " ".join(text.split())
-    if len(text) <= limit:
-        return text
-    cut = text[:limit]
-    return cut[: cut.rfind(".") + 1] if "." in cut[200:] else cut + "…"
 
 
 def main(mountain_data_path):
@@ -148,8 +184,11 @@ def main(mountain_data_path):
     print(f"산 {len(base)}개, 산불 시군구 {len(fire_codes)}개, 산악기상 관측소 {len(stations)}곳")
     station_by_id = {s["id"]: s["name"] for s in stations}
 
-    out, stats = [], Counter()
+    fixes = load_fixes()
+    out, stats, height_gaps = [], Counter(), []
     for index, m in enumerate(base, start=1):
+        mid = f"m{index:03d}"
+        name = DISPLAY_NAMES.get(m["name"], m["name"])
         regions = REGION_OVERRIDES.get(m["name"]) or parse_regions(m.get("region"))
         known = [r for r in regions if r in fire_codes]
         unknown = [r for r in regions if r not in fire_codes]
@@ -159,35 +198,36 @@ def main(mountain_data_path):
 
         # 같은 이름의 산이 전국에 여러 개다(백운산·매봉산…). 산정보 서비스에는 좌표가 없어서
         # 소재지 주소가 이 산의 시군구와 같은 레코드만 같은 산으로 본다.
-        records = [
-            rec for rec in mountain_info_records(m["name"])
-            if parse_address(rec.get("mntiadd")) in known
-        ]
-        time.sleep(0.15)
+        records = [rec for rec in mountain_info_records(name) if rec["_region"] in known]
         stats["info_found" if records else "info_missing"] += 1
 
-        station_ids, how = match_stations(m["name"], known, stations)
+        station_ids, how = match_stations(name, known, stations)
         stats[f"station_{how}"] += 1
 
-        main_record = next((r for r in records if r.get("mntiname") == m["name"]), records[0] if records else {})
-        description = clean_text(main_record.get("mntidetails")) or clean_text(m.get("description"))
-        top = clean_text(main_record.get("mntitop"), 160)
-        height = main_record.get("mntihigh")
-        elevation = m.get("elevation_m") or (round(float(height)) if height and float(height) > 0 else None)
+        # 산 소개: 후보(지자체별 산정보 레코드 + 올라 설명) 중 이 산 이름이 들어 있는 글을 골라 다듬는다
+        description, source = pick(name, {name, m["name"]}, known, records, m.get("description"), fixes.get(mid, {}))
+        stats[f"description_{source}"] += 1
+
+        elevation = ELEVATION_FIXES.get(m["name"]) or m.get("elevation_m")
+        heights = [float(r["mntihigh"]) for r in records if (r.get("mntihigh") or "0").replace(".", "", 1).isdigit() and float(r["mntihigh"]) > 0]
+        if not elevation and heights:
+            elevation = round(heights[0])
+        if elevation and heights and min(abs(h - elevation) for h in heights) > 30:
+            height_gaps.append(f"{name} 앱 {elevation}m / 산정보 {', '.join(f'{h:g}' for h in heights)}m")
 
         out.append({
-            "id": f"m{index:03d}",
-            "name": m["name"],
-            "region": m.get("region", ""),
+            "id": mid,
+            "name": name,
+            "region": REGION_FIXES[m["name"]][0] if m["name"] in REGION_FIXES else m.get("region", ""),
             "lat": round(m["lat"], 5),
             "lng": round(m["lng"], 5),
             "elevation_m": elevation,
             "difficulty": m.get("difficulty", "medium"),
             "walk_min": m.get("walk_time_min"),
             "walk_max": m.get("walk_time_max"),
-            "national_park": bool(m.get("national_park")),
+            "national_park": bool(m.get("national_park")) or m["name"] in NATIONAL_PARK,
             "description": description,
-            "top": top,
+            "description_source": source,
             "codes": sorted({r["mntilistno"] for r in records if r.get("mntilistno")}),
             "regions": known,
             "fire_codes": [fire_codes[r] for r in known],
@@ -217,6 +257,10 @@ def main(mountain_data_path):
     write_json(PUBLIC_DATA / "stations.json", {s["id"]: s["name"] for s in stations})
     (PUBLIC_DATA.parent.parent / "scripts" / "match_report.txt").write_text("\n".join(report), encoding="utf-8")
     print("매칭 통계:", dict(stats))
+    if height_gaps:
+        print("높이가 산정보와 30m 넘게 다른 산 (확인용):")
+        for line in height_gaps:
+            print("  " + line)
 
 
 if __name__ == "__main__":

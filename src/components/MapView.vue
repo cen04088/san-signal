@@ -78,20 +78,35 @@ function fitOptions(maxZoom) {
   return { paddingTopLeft: tl, paddingBottomRight: br, maxZoom }
 }
 
-// 지도 영역 크기가 0이면(숨은 탭 등) 맞추지 않고, 크기가 생길 때 맞춘다
-let fitted = false
-function fitInitial() {
+// 지도 영역 크기가 0이면(숨은 탭 등) Leaflet이 좌표를 NaN으로 계산해 예외를 던진다.
+// 그때는 목적지만 기억해 두고, 크기가 생기면(ResizeObserver) 바로 맞춘다.
+let pending = null
+
+function sized() {
   const size = map.getSize()
-  if (fitted || size.x < 50 || size.y < 50) return
-  fitted = true
-  if (props.selectedId) drawTrail()
-  else map.fitBounds(KOREA, { ...fitOptions(), animate: false })
+  return size.x >= 50 && size.y >= 50
+}
+
+function flushPending() {
+  if (!pending || !sized()) return
+  const [bounds, maxZoom] = pending
+  pending = null
+  map.fitBounds(bounds, { ...fitOptions(maxZoom), animate: false })
 }
 
 // 산을 고르거나 목록으로 돌아올 때 지도가 그 자리로 날아간다. 움직임 줄이기 설정이면 바로 바꾼다.
-function moveTo(bounds, maxZoom) {
-  if (reducedMotion()) map.fitBounds(bounds, { ...fitOptions(maxZoom), animate: false })
-  else map.flyToBounds(bounds, { ...fitOptions(maxZoom), duration: 0.6 })
+function moveTo(bounds, maxZoom, animate = true) {
+  if (!sized()) {
+    pending = [bounds, maxZoom]
+    return
+  }
+  pending = null
+  try {
+    if (!animate || reducedMotion()) map.fitBounds(bounds, { ...fitOptions(maxZoom), animate: false })
+    else map.flyToBounds(bounds, { ...fitOptions(maxZoom), duration: 0.6 })
+  } catch {
+    pending = [bounds, maxZoom]
+  }
 }
 
 function drawMarkers() {
@@ -192,10 +207,11 @@ onMounted(() => {
   markerLayer = markRaw(L.layerGroup().addTo(map))
   userLayer = markRaw(L.layerGroup().addTo(map))
   drawMarkers()
-  fitInitial()
+  if (props.selectedId) drawTrail()
+  else moveTo(L.latLngBounds(KOREA), undefined, false)
   resizeObserver = new ResizeObserver(() => {
     map.invalidateSize()
-    fitInitial()
+    flushPending()
   })
   resizeObserver.observe(el.value)
   darkMq.addEventListener('change', onScheme)
@@ -210,7 +226,7 @@ onBeforeUnmount(() => {
 watch(() => props.mountains, () => {
   if (!map) return
   drawMarkers()
-  if (props.selectedId && fitted) drawTrail() // 주소(#m003)로 바로 들어온 경우
+  if (props.selectedId) drawTrail() // 주소(#m003)로 바로 들어온 경우
 })
 watch(() => props.verdicts, () => map && restyle())
 watch(() => props.selectedId, (id, old) => {
