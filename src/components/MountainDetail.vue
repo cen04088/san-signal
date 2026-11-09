@@ -6,7 +6,6 @@ const props = defineProps({
   mountain: { type: Object, required: true },
   verdict: { type: Object, required: true },
   trail: { type: Object, default: null },
-  quality: { type: Object, default: null },
 })
 const emit = defineEmits(['back'])
 
@@ -108,8 +107,6 @@ const riskNotes = computed(() => {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
 })
 
-const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
-
 // 등산로를 그리지 않는 산: 산림청 등산로 공간정보에 없거나, 찾은 구간이 이 산 것으로 보기 어려운 경우
 const noTrailText = computed(() => {
   const t = m.value.trails || {}
@@ -189,7 +186,6 @@ const noTrailText = computed(() => {
           </li>
         </ul>
         <p class="hint">지도에서 등산로 선을 누르면 구간 이름, 소요 시간, 위험 정보가 나와요.</p>
-        <p class="src-line">산림청 등산로(1:25,000) 공간정보<template v-if="trailDate"> · 자료 기준일 {{ trailDate }}</template></p>
       </template>
       <template v-else>
         <p class="hint">{{ noTrailText }}</p>

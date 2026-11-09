@@ -10,7 +10,6 @@ import { DESKTOP_QUERY, GAP, PANEL_W, detentPositions } from './lib/sheet.js'
 const BASE = import.meta.env.BASE_URL
 
 const mountains = ref([])
-const quality = ref(null)
 const stationNames = ref({})
 const snapshot = ref(null)
 const loadError = ref('')
@@ -72,7 +71,6 @@ onMounted(async () => {
   try {
     const [m, s] = await Promise.all([getJson('data/mountains.json'), getJson('data/stations.json')])
     mountains.value = m.mountains
-    quality.value = m.trail_quality
     stationNames.value = s
   } catch {
     loadError.value = '산 목록을 불러오지 못했어요. 잠시 후 다시 열어 주세요.'
@@ -185,9 +183,6 @@ function locate() {
     <p v-else-if="!loading && !snapshot" class="notice">
       실시간 산림 데이터를 불러오지 못했어요. 등산로와 산 정보만 보여드려요.
     </p>
-    <p v-else-if="staleHours > 3" class="notice">
-      실시간 데이터가 {{ Math.floor(staleHours) }}시간 전 것이에요. 공공데이터 API 응답이 늦어지고 있어요.
-    </p>
 
     <MountainDetail
       v-if="selected"
@@ -197,7 +192,6 @@ function locate() {
       :mountain="selected"
       :verdict="verdicts[selected.id]"
       :trail="trails[selected.id]"
-      :quality="quality"
       @back="select(null)"
     />
     <MountainList
