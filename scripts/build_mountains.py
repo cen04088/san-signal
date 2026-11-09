@@ -96,6 +96,19 @@ ELEVATION_FIXES = {
     "산방산": 395,   # 산정보 395m. 507m는 근거를 찾지 못함
 }
 
+# 올라 산 목록의 좌표가 정상이 아니던 산 → OpenStreetMap 봉우리(natural=peak) 좌표.
+# 산림청 등산로 구간이 정상에 닿는지 볼 때도 이 좌표를 쓴다.
+COORD_FIXES = {
+    "봉화청량산": (36.79444, 128.90882),  # 장인봉. 원래 좌표는 북쪽으로 11km 떨어진 곳
+    "마이산": (35.76054, 127.41150),      # 암마이봉. 원래 좌표는 남쪽 3.8km
+    "불암산": (37.66365, 127.09524),      # 508m 정상. 원래 좌표는 남쪽 3.8km(태릉 부근)
+    "팔공산": (36.01655, 128.69532),      # 비로봉 1,193m. 원래 2.9km
+    "금대봉": (37.21182, 128.91600),      # 1,418m. 원래 2.0km
+    "용문산": (37.56197, 127.54907),      # 가섭봉 1,157m. 원래 1.9km
+    "금정산": (35.28015, 129.05062),      # 고당봉 801m. 원래 0.9km
+    "광려산": (35.18305, 128.48395),      # 752m. 원래 0.7km
+}
+
 # 국립공원 구역 안에 있는데 표시가 빠졌던 산
 NATIONAL_PARK = {
     "도봉산", "남덕유산", "대야산", "도락산", "금수산", "문경황장산", "입암산", "팔영산", "노인봉", "점봉산", "제비봉",
@@ -219,8 +232,8 @@ def main(mountain_data_path):
             "id": mid,
             "name": name,
             "region": REGION_FIXES[m["name"]][0] if m["name"] in REGION_FIXES else m.get("region", ""),
-            "lat": round(m["lat"], 5),
-            "lng": round(m["lng"], 5),
+            "lat": round(COORD_FIXES.get(m["name"], (m["lat"], m["lng"]))[0], 5),
+            "lng": round(COORD_FIXES.get(m["name"], (m["lat"], m["lng"]))[1], 5),
             "elevation_m": elevation,
             "difficulty": m.get("difficulty", "medium"),
             "walk_min": m.get("walk_time_min"),

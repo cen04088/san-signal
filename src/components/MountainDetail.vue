@@ -109,6 +109,18 @@ const riskNotes = computed(() => {
 })
 
 const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
+
+// 등산로를 그리지 않는 산: 산림청 등산로 공간정보에 없거나, 찾은 구간이 이 산 것으로 보기 어려운 경우
+const noTrailText = computed(() => {
+  const t = m.value.trails || {}
+  if (t.status === 'far') {
+    return `산림청 등산로 공간정보에서 찾은 구간 중 정상에 가장 가까운 것도 ${t.nearest_km}km 떨어져 있어요. 이 산 등산로로 보기 어려워 지도에 그리지 않았어요.`
+  }
+  if (t.status === 'few') {
+    return `산림청 등산로 공간정보에 이 산 구간이 ${t.found}개뿐이라 지도에 그리지 않았어요.`
+  }
+  return '산림청 등산로 공간정보에 이 산의 등산로가 없어요.'
+})
 </script>
 
 <template>
@@ -179,7 +191,10 @@ const trailDate = computed(() => props.quality?.data_date?.[0]?.[0] || '')
         <p class="hint">지도에서 등산로 선을 누르면 구간 이름, 소요 시간, 위험 정보가 나와요.</p>
         <p class="src-line">산림청 등산로(1:25,000) 공간정보<template v-if="trailDate"> · 자료 기준일 {{ trailDate }}</template></p>
       </template>
-      <p v-else class="hint">산림청 등산로 공간정보에 이 산의 등산로가 아직 없어요.</p>
+      <template v-else>
+        <p class="hint">{{ noTrailText }}</p>
+        <p v-if="m.national_park" class="hint">국립공원 탐방로는 국립공원공단 안내를 확인하세요.</p>
+      </template>
     </section>
 
     <section class="block" v-if="m.description">

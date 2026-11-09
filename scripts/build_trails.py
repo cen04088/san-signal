@@ -20,6 +20,11 @@ CODE_MATCH_KM = 20   # 산코드가 같을 때 허용 거리 (같은 코드가 �
 NAME_MATCH_KM = 12   # 산 이름만 같을 때 허용 거리 (동명이산 방지)
 TOLERANCE_DEG = 0.00004  # 약 4m
 
+# 산과 이어진 구간이 이 기준을 못 넘으면 지도에 그리지 않는다.
+# 다른 산(같은 이름, 같은 산코드)의 등산로이거나, 정상에 닿지 않는 조각뿐인 경우다.
+SUMMIT_KM = 1.0    # 가장 가까운 구간이 정상에서 이만큼 안에 있어야 한다
+MIN_SEGMENTS = 8   # 구간이 이보다 적으면 조각뿐이다
+
 
 def km(lat1, lng1, lat2, lng2):
     p1, p2 = math.radians(lat1), math.radians(lat2)
@@ -68,6 +73,7 @@ def main(shp_dir):
             by_name.setdefault(alias, []).append(m)
 
     segments = {m["id"]: [] for m in mountains}
+    nearest = {m["id"]: math.inf for m in mountains}  # 정상에서 가장 가까운 구간까지 거리(km)
     for row, parts in zip(rows, shapes):
         if row["_deleted"] or not parts or not parts[0]:
             continue
@@ -92,12 +98,15 @@ def main(shp_dir):
             continue
 
         lines = []
+        near = math.inf
         for part in parts:
             pts = simplify([utmk_to_wgs84(px, py) for px, py in part], TOLERANCE_DEG)
             if len(pts) >= 2:
                 lines.append(encode_polyline(pts))
+                near = min(near, *(km(plat, plng, target["lat"], target["lng"]) for plat, plng in pts))
         if not lines:
             continue
+        nearest[target["id"]] = min(nearest[target["id"]], near)
         length = to_float(row.get("PMNTN_LT")) or 0
         segment = {
             "n": row.get("PMNTN_NM") or "",
@@ -122,25 +131,47 @@ def main(shp_dir):
     total_bytes = 0
     for m in mountains:
         segs = segments[m["id"]]
+        near = nearest[m["id"]]
+        if not segs:
+            status = "none"
+        elif near > SUMMIT_KM:
+            status = "far"
+        elif len(segs) < MIN_SEGMENTS:
+            status = "few"
+        else:
+            status = "ok"
+        if status != "ok":
+            # 그리지 않는 산: 화면에서 이유를 한 줄로 알려줄 수 있게 원본 구간 수와 거리만 남긴다
+            m["trails"] = {"segments": 0, "status": status, "found": len(segs)}
+            if segs:
+                m["trails"]["nearest_km"] = round(near, 1)
+            continue
         m["trails"] = {
             "segments": len(segs),
             "km": round(sum(s["km"] for s in segs), 1),
             "closed": sum(1 for s in segs if s.get("closed")),
             "ctrl": sum(1 for s in segs if s.get("ctrl")),
             "risk": sum(1 for s in segs if s.get("risk")),
+            "status": status,
         }
-        if segs:
-            path = write_json(trail_dir / f"{m['id']}.json", {"id": m["id"], "segments": segs})
-            total_bytes += path.stat().st_size
+        path = write_json(trail_dir / f"{m['id']}.json", {"id": m["id"], "segments": segs})
+        total_bytes += path.stat().st_size
 
     payload["trail_quality"] = quality
     write_json(PUBLIC_DATA / "mountains.json", payload)
-    covered = sum(1 for m in mountains if m["trails"]["segments"])
-    print(f"등산로가 있는 산 {covered}/{len(mountains)}개, 파일 합계 {total_bytes / 1e6:.1f}MB")
+    by_status = Counter(m["trails"]["status"] for m in mountains)
+    print(f"지도에 그리는 산 {by_status['ok']}/{len(mountains)}개, 파일 합계 {total_bytes / 1e6:.1f}MB")
     print("품질:", json.dumps(quality, ensure_ascii=False))
     for m in sorted(mountains, key=lambda m: -m["trails"]["segments"])[:8]:
         print(" ", m["name"], m["trails"])
-    print("등산로 없음:", ", ".join(m["name"] for m in mountains if not m["trails"]["segments"]))
+    labels = {"far": f"정상 {SUMMIT_KM:g}km 안에 닿는 구간 없음", "few": f"구간 {MIN_SEGMENTS}개 미만", "none": "구간 없음"}
+    for status, label in labels.items():
+        rows_ = [m for m in mountains if m["trails"]["status"] == status]
+        detail = ", ".join(
+            m["name"] + (f"({m['trails']['found']}구간 {m['trails'].get('nearest_km')}km)" if m["trails"]["found"] else "")
+            for m in rows_
+        )
+        print(f"{label} {len(rows_)}: {detail}")
 
 
 if __name__ == "__main__":
