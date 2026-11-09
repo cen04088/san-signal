@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+.env.*
+public/live/
+*.log
+__pycache__/
+scripts/match_report.txt
+.DS_Store

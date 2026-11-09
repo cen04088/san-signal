@@ -1,0 +1,67 @@
+:root {
+  --bg: #f3f5f1;
+  --surface: #ffffff;
+  --surface-2: #f7f8f6;
+  --ink: #15211a;
+  --ink-2: #46544b;
+  --ink-3: #7a877f;
+  --line: #e2e7e1;
+  --brand: #1f6b47;
+  --ok: #1f9d55;
+  --caution: #e0a100;
+  --danger: #d9423b;
+  --ok-bg: #e6f4eb;
+  --caution-bg: #fcf3d6;
+  --danger-bg: #fbe7e5;
+  --radius: 14px;
+  --shadow: 0 1px 2px rgba(21, 33, 26, 0.06), 0 6px 20px rgba(21, 33, 26, 0.06);
+  font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  word-break: keep-all;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+input {
+  font: inherit;
+}
+
+a {
+  color: var(--brand);
+}
+
+.leaflet-container {
+  font-family: inherit;
+  background: #e9ece6;
+}
+
+.leaflet-tooltip.mountain-tip {
+  font-weight: 600;
+  font-size: 12px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: none;
+  box-shadow: var(--shadow);
+}
+
+.leaflet-popup-content {
+  margin: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
