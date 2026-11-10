@@ -1,6 +1,8 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { PhArrowLeft, PhExport } from '@phosphor-icons/vue'
 import { hhmm, hoursText, LEVEL_META, OK } from '../lib/verdict.js'
+import SignalIcon from './SignalIcon.vue'
 
 const props = defineProps({
   mountain: { type: Object, required: true },
@@ -16,7 +18,7 @@ const v = computed(() => props.verdict)
 const walkText = computed(() => {
   const { walk_min: a, walk_max: b } = m.value
   if (!a) return ''
-  return b && b !== a ? `일반 코스 ${hoursText(a)}~${hoursText(b)}시간` : `일반 코스 약 ${hoursText(a)}시간`
+  return b && b !== a ? `${hoursText(a)}~${hoursText(b)}시간` : `약 ${hoursText(a)}시간`
 })
 
 // 판정에 실제로 쓴 데이터 이름. 빠진 데이터가 있으면 함께 알린다.
@@ -71,7 +73,7 @@ const weatherTile = computed(() => {
   return {
     state: ['ok', 'caution', 'danger'][worst],
     value: w.t != null ? `${w.t.toFixed(1)}℃` : '-',
-    note: parts.join(' · '),
+    note: parts.join(', '),
     foot: `${w.label}${how} · ${w.at || ''} 관측`,
   }
 })
@@ -81,11 +83,11 @@ const sunTile = computed(() => {
   if (s.night) {
     return { state: 'night', value: `일출 ${hhmm(s.nextSunrise)}`, note: '해가 진 시간이에요. 야간 산행은 피하세요.' }
   }
-  const late = s.minutesLeft < 30 ? 'danger' : new Date() > s.latestStart ? 'caution' : 'ok'
+  const late = s.minutesLeft < 30 ? 'danger' : s.startPassed ? 'caution' : 'ok'
   return {
     state: late,
     value: `일몰 ${hhmm(s.sunset)}`,
-    note: `늦어도 ${hhmm(s.latestStart)}까지 출발`,
+    note: s.startPassed ? `오늘 출발 권장 시각(${hhmm(s.latestStart)})이 지났어요` : `늦어도 ${hhmm(s.latestStart)}까지 출발`,
     foot: `일반 코스 왕복 ${hoursText(s.walk)}시간에 30분을 더한 기준`,
   }
 })
@@ -107,6 +109,48 @@ const riskNotes = computed(() => {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
 })
 
+// 함께 갈 사람에게 이 산 주소를 보낸다. 공유 창이 없는 브라우저는 링크를 복사한다.
+const copied = ref(false)
+async function share() {
+  const url = location.href
+  const text = `${m.value.name} 오늘 산행 신호: ${v.value.hasLive ? meta.value.label : '자료 없음'}`
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: `${m.value.name} · 산행 신호등`, text, url })
+    } catch {
+      // 공유 창을 닫은 경우
+    }
+    return
+  }
+  const body = `${text}\n${url}`
+  let ok = false
+  try {
+    await navigator.clipboard.writeText(body)
+    ok = true
+  } catch {
+    ok = copyByTextarea(body) // 클립보드 권한이 없는 환경
+  }
+  copied.value = ok ? 'done' : 'fail'
+  setTimeout(() => (copied.value = false), 2500)
+}
+
+function copyByTextarea(body) {
+  const area = document.createElement('textarea')
+  area.value = body
+  area.setAttribute('readonly', '')
+  area.style.cssText = 'position:fixed;top:0;left:0;opacity:0'
+  document.body.appendChild(area)
+  area.select()
+  let ok = false
+  try {
+    ok = document.execCommand('copy')
+  } catch {
+    ok = false
+  }
+  area.remove()
+  return ok
+}
+
 // 등산로를 그리지 않는 산: 산림청 등산로 공간정보에 없거나, 찾은 구간이 이 산 것으로 보기 어려운 경우
 const noTrailText = computed(() => {
   const t = m.value.trails || {}
@@ -122,23 +166,30 @@ const noTrailText = computed(() => {
 
 <template>
   <article class="detail">
-    <button type="button" class="back" @click="emit('back')">
-      <svg viewBox="0 0 12 20" width="9" height="15" aria-hidden="true">
-        <path d="M10 2 2 10l8 8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>
-      전체 산
-    </button>
+    <div class="topbar">
+      <button type="button" class="btn-soft" @click="emit('back')">
+        <PhArrowLeft :size="18" weight="bold" aria-hidden="true" />
+        전체 산
+      </button>
+      <button type="button" class="btn-soft" @click="share">
+        <PhExport :size="18" weight="bold" aria-hidden="true" />
+        <span aria-live="polite">{{ copied === 'done' ? '링크 복사됨' : copied === 'fail' ? '주소창 링크를 복사하세요' : '공유' }}</span>
+      </button>
+    </div>
 
     <header class="head">
-      <h1>
-        {{ m.name }}
+      <h1>{{ m.name }}</h1>
+      <p class="region">
+        {{ m.region }}
         <em v-if="m.national_park">국립공원</em>
-      </h1>
-      <p>
-        {{ m.region }}<template v-if="m.elevation_m"> · {{ m.elevation_m.toLocaleString() }}m</template><template v-if="walkText"> · {{ walkText }}</template>
       </p>
+      <dl v-if="m.elevation_m || walkText" class="facts">
+        <div v-if="m.elevation_m"><dt>높이</dt><dd>{{ m.elevation_m.toLocaleString() }}m</dd></div>
+        <div v-if="walkText"><dt>일반 코스</dt><dd>{{ walkText }}</dd></div>
+      </dl>
     </header>
 
+    <!-- 신호: 신호등 몸체처럼 검은 카드에 불 하나만 켠다 -->
     <section class="signal" :class="v.hasLive ? meta.key : 'none'" :aria-label="`산행 신호 ${v.hasLive ? meta.label : '자료 없음'}`">
       <div class="lights" aria-hidden="true">
         <i class="r" :class="{ on: v.hasLive && v.level === 2 }" />
@@ -152,9 +203,12 @@ const noTrailText = computed(() => {
     </section>
 
     <ul class="reasons" v-if="v.reasons.length">
-      <li v-for="(r, i) in v.reasons" :key="i" :class="LEVEL_META[r.level].key">
-        <span class="txt">{{ r.text }}</span>
-        <span class="src">{{ r.source }}</span>
+      <li v-for="(r, i) in v.reasons" :key="i">
+        <SignalIcon :level="r.level" :size="28" />
+        <span class="r-main">
+          <span class="txt">{{ r.text }}</span>
+          <span class="src">{{ r.source }}</span>
+        </span>
       </li>
     </ul>
     <p class="calm" v-else-if="v.hasLive">
@@ -163,7 +217,7 @@ const noTrailText = computed(() => {
 
     <section class="tiles">
       <div v-for="t in tiles" :key="t.key" class="tile" :class="t.state">
-        <span class="t-title">{{ t.title }}</span>
+        <span class="t-title"><i class="swatch" aria-hidden="true" />{{ t.title }}</span>
         <strong class="t-value">{{ t.value }}</strong>
         <span class="t-note" v-if="t.note">{{ t.note }}</span>
         <span class="t-foot" v-if="t.foot">{{ t.foot }}</span>
@@ -174,12 +228,13 @@ const noTrailText = computed(() => {
     <section class="block">
       <h2>등산로</h2>
       <template v-if="m.trails?.segments">
-        <p class="trail-sum">
-          <b>{{ m.trails.segments }}</b>개 구간 · 총 <b>{{ m.trails.km }}</b>km
-          <template v-if="m.trails.risk"> · 위험구간 <b class="warn">{{ m.trails.risk }}</b></template>
-          <template v-if="m.trails.closed"> · 폐쇄 <b>{{ m.trails.closed }}</b></template>
-          <template v-if="m.trails.ctrl"> · 통제 <b class="warn">{{ m.trails.ctrl }}</b></template>
-        </p>
+        <dl class="facts trail-facts">
+          <div><dt>구간</dt><dd>{{ m.trails.segments }}개</dd></div>
+          <div><dt>총 길이</dt><dd>{{ m.trails.km }}km</dd></div>
+          <div v-if="m.trails.risk"><dt>위험구간</dt><dd class="warn">{{ m.trails.risk }}</dd></div>
+          <div v-if="m.trails.closed"><dt>폐쇄</dt><dd>{{ m.trails.closed }}</dd></div>
+          <div v-if="m.trails.ctrl"><dt>통제</dt><dd class="warn">{{ m.trails.ctrl }}</dd></div>
+        </dl>
         <ul v-if="riskNotes.length" class="risks">
           <li v-for="[text, n] in riskNotes" :key="text">
             <span>{{ text }}</span><small>{{ n }}구간</small>
@@ -206,98 +261,114 @@ const noTrailText = computed(() => {
 </template>
 
 <style scoped>
-.back {
-  display: inline-flex;
+.topbar {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  margin-left: -4px;
-  padding: 6px 10px 6px 6px;
-  border: 0;
-  border-radius: 10px;
-  background: none;
-  font-size: var(--fs-body);
-  font-weight: 650;
-  color: var(--brand);
-  transition: var(--press), background-color 120ms ease;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-.back:active {
-  transform: scale(0.96);
-  background: var(--surface);
+.topbar .btn-soft:first-child {
+  padding-left: 12px;
 }
 
+/* ── 머리: 큰 이름, 그 아래 지역, 숫자는 이름표가 붙은 칸으로 ── */
 .head h1 {
-  margin: 6px 0 4px;
+  margin: 16px 0 2px;
   font-size: var(--fs-large);
-  font-weight: 750;
-  line-height: 1.15;
-  letter-spacing: var(--tr-large);
+  font-weight: 700;
+  line-height: 1.2;
 }
 
-.head h1 em {
-  margin-left: 6px;
-  padding: 2px 8px;
-  border-radius: 8px;
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line);
-  font-size: var(--fs-caption);
+.region {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--ink-2);
+}
+
+.region em {
+  padding: 2px 10px;
+  border-radius: var(--pill);
+  background: var(--soft);
+  font-size: var(--fs-footnote);
   font-style: normal;
   font-weight: 600;
-  letter-spacing: var(--tr-caption);
-  color: var(--ink-2);
-  vertical-align: 5px;
+  color: var(--ink);
 }
 
-.head p {
-  margin: 0 0 16px;
-  font-size: var(--fs-body);
-  color: var(--ink-2);
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  margin: 14px 0 0;
 }
 
+.facts div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.facts dt {
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
+}
+
+.facts dd {
+  margin: 0;
+  font-size: var(--fs-headline);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.facts dd.warn {
+  color: var(--warn-text);
+}
+
+/* ── 신호 카드: 검은 신호등 몸체 ── */
 .signal {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 16px;
-  border-radius: 20px;
-  background: var(--surface-2);
+  gap: 18px;
+  margin-top: 20px;
+  padding: 18px;
+  border-radius: var(--radius);
+  background: var(--housing);
+  color: #ffffff;
 }
-
-.signal.ok { background: var(--ok-bg); }
-.signal.caution { background: var(--caution-bg); }
-.signal.danger { background: var(--danger-bg); }
 
 .lights {
   flex: none;
   display: flex;
-  gap: 6px;
+  gap: 8px;
   padding: 8px 10px;
-  border-radius: 999px;
-  background: var(--housing);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border-radius: var(--pill);
+  background: #000000;
 }
 
 .lights i {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  opacity: 0.18;
+  background: #3a3a3a;
+  transition: background-color 200ms ease, transform 200ms ease;
 }
-
-.lights .r { background: var(--danger); color: var(--danger); }
-.lights .y { background: var(--caution); color: var(--caution); }
-.lights .g { background: var(--ok); color: var(--ok); }
 
 .lights i.on {
-  opacity: 1;
-  box-shadow: 0 0 14px 1px currentColor;
-  animation: lamp-on 420ms ease-out;
+  animation: lamp-on 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+
+.lights .r.on { background: #ef5b52; }
+.lights .y.on { background: #f0b429; }
+.lights .g.on { background: #34b46a; }
 
 @keyframes lamp-on {
   from {
-    opacity: 0.18;
-    box-shadow: 0 0 0 0 transparent;
+    transform: scale(0.6);
+    opacity: 0.3;
   }
 }
 
@@ -310,62 +381,63 @@ const noTrailText = computed(() => {
 
 .msg strong {
   font-size: var(--fs-title2);
-  font-weight: 750;
+  font-weight: 700;
   line-height: 1.3;
-  letter-spacing: var(--tr-title2);
 }
-
-.signal.ok .msg strong { color: var(--ok-ink); }
-.signal.caution .msg strong { color: var(--caution-ink); }
-.signal.danger .msg strong { color: var(--danger-ink); }
 
 .msg span {
   font-size: var(--fs-caption);
-  letter-spacing: var(--tr-caption);
-  color: var(--ink-2);
+  color: #bdbdbd;
+  line-height: 1.45;
 }
 
+/* ── 판정 이유: 상자 없이 줄로 ── */
 .reasons {
   list-style: none;
-  margin: 12px 0 0;
+  margin: 8px 0 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
 }
 
 .reasons li {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 12px 10px 14px;
-  border-radius: 12px;
-  background: var(--surface);
-  box-shadow: inset 4px 0 0 var(--ok), inset 0 0 0 1px var(--line);
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
 }
 
-.reasons li.caution { box-shadow: inset 4px 0 0 var(--caution), inset 0 0 0 1px var(--line); }
-.reasons li.danger { box-shadow: inset 4px 0 0 var(--danger), inset 0 0 0 1px var(--line); }
+.reasons li + li {
+  border-top: 1px solid var(--line);
+}
 
-.reasons .txt {
+.r-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-top: 3px;
+}
+
+.txt {
   font-size: var(--fs-body);
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.45;
 }
 
-.reasons .src {
-  font-size: var(--fs-footnote);
-  letter-spacing: var(--tr-footnote);
+.src {
+  font-size: var(--fs-caption);
   color: var(--ink-3);
 }
 
 .calm {
   margin: 12px 0 0;
-  font-size: var(--fs-body);
-  line-height: 1.6;
-  color: var(--ink-2);
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--soft);
+  font-size: var(--fs-callout);
+  line-height: 1.55;
 }
 
+/* ── 4칸 요약: 회색 칸, 상태는 제목 앞 작은 색 점으로 ── */
 .tiles {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -374,47 +446,48 @@ const noTrailText = computed(() => {
 }
 
 .tile {
-  position: relative;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 13px 12px 10px;
+  padding: 14px;
   border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: 0 0 0 1px var(--line);
-  overflow: hidden;
+  background: var(--soft);
+  min-width: 0;
 }
-
-.tile::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 3px;
-  background: var(--line);
-}
-
-.tile.ok::before { background: var(--ok); }
-.tile.caution::before { background: var(--caution); }
-.tile.danger::before { background: var(--danger); }
-.tile.night::before { background: var(--night); }
 
 .t-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--fs-caption);
-  font-weight: 650;
-  letter-spacing: var(--tr-caption);
+  font-weight: 600;
   color: var(--ink-2);
 }
 
+.swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+
+.tile.ok .swatch { background: var(--ok); }
+.tile.caution .swatch { background: var(--caution); }
+.tile.danger .swatch { background: var(--danger); }
+.tile.none .swatch { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
+.tile.night .swatch { background: var(--ink); }
+
 .t-value {
+  margin-top: 4px;
   font-size: var(--fs-title2);
-  font-weight: 750;
-  line-height: 1.3;
-  letter-spacing: var(--tr-title2);
+  font-weight: 700;
+  line-height: 1.25;
   font-variant-numeric: tabular-nums;
 }
 
 .tile.caution .t-value { color: var(--caution-text); }
 .tile.danger .t-value { color: var(--danger-text); }
+.tile.none .t-value { color: var(--ink-3); }
 
 .t-note {
   font-size: var(--fs-caption);
@@ -422,100 +495,99 @@ const noTrailText = computed(() => {
   color: var(--ink-2);
 }
 
-.t-foot,
-.t-src {
+.t-foot {
   font-size: var(--fs-footnote);
-  letter-spacing: var(--tr-footnote);
-  line-height: 1.4;
+  line-height: 1.45;
   color: var(--ink-3);
 }
 
 .t-src {
-  margin-top: 4px;
+  margin-top: 6px;
+  font-size: var(--fs-footnote);
+  color: var(--ink-3);
 }
 
+/* ── 아래 영역: 상자 없이 제목과 간격으로 나눈다 ── */
 .block {
-  margin-top: 26px;
+  margin-top: 28px;
 }
 
 .block h2 {
   margin: 0 0 8px;
   font-size: var(--fs-title2);
-  font-weight: 750;
-  line-height: 1.3;
-  letter-spacing: var(--tr-title2);
+  font-weight: 700;
 }
 
-.trail-sum {
-  margin: 0 0 8px;
-  font-size: var(--fs-body);
-  color: var(--ink-2);
-  font-variant-numeric: tabular-nums;
-}
-
-.trail-sum b {
-  color: var(--ink);
-}
-
-.trail-sum b.warn {
-  color: var(--warn-text);
+.trail-facts {
+  margin: 0 0 4px;
 }
 
 .risks {
   list-style: none;
-  margin: 0 0 8px;
+  margin: 12px 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .risks li {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 8px 11px;
-  border-radius: 10px;
-  background: var(--risk-bg);
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--soft);
   font-size: var(--fs-callout);
-  color: var(--risk-ink);
+  font-weight: 600;
 }
 
 .risks small {
   flex: none;
   font-size: var(--fs-caption);
-  color: var(--risk-ink-2);
-  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--warn-text);
 }
 
 .hint {
-  margin: 0;
+  margin: 10px 0 0;
   font-size: var(--fs-callout);
-  line-height: 1.5;
-  color: var(--ink-3);
-}
-
-.src-line {
-  margin: 6px 0 0;
-  font-size: var(--fs-footnote);
-  letter-spacing: var(--tr-footnote);
-  color: var(--ink-3);
+  line-height: 1.55;
+  color: var(--ink-2);
 }
 
 .desc {
   margin: 0;
   font-size: var(--fs-body);
-  line-height: 1.75;
-  color: var(--ink-2);
+  line-height: 1.7;
+  white-space: pre-line;
+}
+
+.src-line {
+  margin: 8px 0 0;
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
 }
 
 .disclaimer {
-  margin-top: 28px;
-  padding-top: 14px;
+  margin: 28px 0 0;
+  padding-top: 16px;
   border-top: 1px solid var(--line);
   font-size: var(--fs-caption);
-  letter-spacing: var(--tr-caption);
   line-height: 1.6;
   color: var(--ink-3);
+}
+
+@media (prefers-color-scheme: dark) {
+  .signal {
+    background: var(--housing-2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lights i.on {
+    animation: none;
+  }
 }
 </style>

@@ -303,11 +303,9 @@ defineExpose({ scroller })
   z-index: 10;
   display: flex;
   flex-direction: column;
-  background: var(--material);
-  -webkit-backdrop-filter: blur(30px) saturate(170%);
-  backdrop-filter: blur(30px) saturate(170%);
-  border-radius: 20px 20px 0 0;
-  box-shadow: var(--shadow-lg), inset 0 1px 0 var(--edge-light);
+  background: var(--bg);
+  border-radius: var(--radius) var(--radius) 0 0;
+  box-shadow: var(--shadow-sheet);
   will-change: transform;
   transform: translate3d(0, 100vh, 0);
 }
@@ -329,7 +327,8 @@ defineExpose({ scroller })
   bottom: var(--gap);
   right: auto;
   width: var(--panel-w);
-  border-radius: 22px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
   transform: none;
   will-change: auto;
 }
@@ -379,12 +378,12 @@ defineExpose({ scroller })
 
 .grabber span {
   display: block;
-  width: 38px;
-  height: 5px;
-  margin: 7px auto 0;
-  border-radius: 3px;
+  width: 36px;
+  height: 4px;
+  margin: 8px auto 0;
+  border-radius: var(--pill);
   background: var(--ink-3);
-  opacity: 0.4;
+  opacity: 0.35;
   transition: opacity 120ms ease, transform 120ms ease;
 }
 
@@ -421,19 +420,8 @@ defineExpose({ scroller })
   touch-action: none;
 }
 
-@media (prefers-reduced-transparency: reduce) {
-  .sheet {
-    background: var(--bg);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-}
-
 @media (prefers-contrast: more) {
   .sheet {
-    background: var(--bg);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
     border: 1px solid var(--ink-3);
   }
 }

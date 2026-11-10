@@ -29,9 +29,11 @@ const navAnim = ref('') // push: 상세로 들어감, pop: 목록으로 돌아�
 let listScroll = 0
 
 // 지도에서 패널에 가려지는 영역. 지도는 이 영역을 빼고 산·등산로를 맞춰 보여준다.
+// 지도 위 범례 알약(높이 36px)도 피한다: 휴대폰은 위, 데스크톱은 아래에 있다.
+const LEGEND_SPACE = 56
 const occlusion = computed(() => {
-  if (desktop.value) return { top: 0, right: 0, bottom: 0, left: PANEL_W + GAP * 2 }
-  return { top: 0, right: 0, bottom: vh.value - detentPositions(vh.value)[detent.value], left: 0 }
+  if (desktop.value) return { top: 0, right: 0, bottom: LEGEND_SPACE, left: PANEL_W + GAP * 2 }
+  return { top: LEGEND_SPACE, right: 0, bottom: vh.value - detentPositions(vh.value)[detent.value], left: 0 }
 })
 
 function readHash() {
@@ -53,6 +55,24 @@ async function loadSnapshot() {
   }
 }
 
+// 처음 열 때와 '다시 시도'를 누를 때
+async function loadAll() {
+  loading.value = true
+  loadError.value = ''
+  if (!mountains.value.length) {
+    try {
+      const [m, s] = await Promise.all([getJson('data/mountains.json'), getJson('data/stations.json')])
+      mountains.value = m.mountains
+      stationNames.value = s
+    } catch {
+      loadError.value = '산 목록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'
+    }
+  }
+  await loadSnapshot()
+  now.value = new Date()
+  loading.value = false
+}
+
 function onResize() {
   vh.value = window.innerHeight
   desktop.value = desktopMq.matches
@@ -68,15 +88,7 @@ onMounted(async () => {
   window.addEventListener('hashchange', onHash)
   window.addEventListener('resize', onResize)
   window.addEventListener('keydown', onKey)
-  try {
-    const [m, s] = await Promise.all([getJson('data/mountains.json'), getJson('data/stations.json')])
-    mountains.value = m.mountains
-    stationNames.value = s
-  } catch {
-    loadError.value = '산 목록을 불러오지 못했어요. 잠시 후 다시 열어 주세요.'
-  }
-  await loadSnapshot()
-  loading.value = false
+  await loadAll()
   clock = setInterval(() => (now.value = new Date()), 60e3)
   refresher = setInterval(loadSnapshot, 15 * 60e3)
 })
@@ -140,11 +152,21 @@ const nextSunrise = computed(() => {
   return now.value > seoulSun.value.sunset ? tomorrow.sunrise : seoulSun.value.sunrise
 })
 
+// idle | locating | denied(권한 거부) | failed(시간 초과·위치 못 찾음)
+const locateState = ref('idle')
+
 function locate() {
-  if (!navigator.geolocation) return
+  if (!navigator.geolocation) {
+    locateState.value = 'failed'
+    return
+  }
+  locateState.value = 'locating'
   navigator.geolocation.getCurrentPosition(
-    (pos) => (userPos.value = { lat: pos.coords.latitude, lng: pos.coords.longitude }),
-    () => (userPos.value = null),
+    (pos) => {
+      userPos.value = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+      locateState.value = 'idle'
+    },
+    (err) => (locateState.value = err.code === 1 ? 'denied' : 'failed'),
     { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 },
   )
 }
@@ -179,9 +201,13 @@ function locate() {
       </div>
     </template>
 
-    <p v-if="loadError" class="notice danger">{{ loadError }}</p>
+    <p v-if="loadError" class="notice danger">
+      {{ loadError }}
+      <button type="button" class="btn-primary" :disabled="loading" @click="loadAll">다시 시도</button>
+    </p>
     <p v-else-if="!loading && !snapshot" class="notice">
       실시간 산림 데이터를 불러오지 못했어요. 등산로와 산 정보만 보여드려요.
+      <button type="button" class="btn-primary" :disabled="loading" @click="loadAll">다시 시도</button>
     </p>
 
     <MountainDetail
@@ -204,6 +230,7 @@ function locate() {
       :night="isNight"
       :next-sunrise="nextSunrise"
       :user-pos="userPos"
+      :locate-state="locateState"
       @select="select"
       @locate="locate"
     />
@@ -235,6 +262,7 @@ function locate() {
   transform: scale(0.97);
 }
 
+/* 브랜드 표시: 신호등 모양 그대로 둔다 */
 .lamp {
   flex: none;
   display: inline-flex;
@@ -264,33 +292,31 @@ function locate() {
 
 .brand-text strong {
   font-size: var(--fs-headline);
-  font-weight: 750;
-  letter-spacing: var(--tr-headline);
+  font-weight: 700;
 }
 
 .brand-text small {
   font-size: var(--fs-footnote);
-  letter-spacing: var(--tr-footnote);
   color: var(--ink-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* 자료 시각: 회색 알약. 점은 자료가 새것(초록)인지 오래됐는지(노랑)를 뜻한다 */
 .stamp {
   flex: none;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: var(--surface);
-  box-shadow: 0 0 0 1px var(--line);
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: var(--pill);
+  background: var(--soft);
   font-size: var(--fs-caption);
   font-weight: 600;
-  letter-spacing: var(--tr-caption);
   font-variant-numeric: tabular-nums;
-  color: var(--ink-2);
+  color: var(--ink);
 }
 
 .dot {
@@ -298,19 +324,18 @@ function locate() {
   height: 7px;
   border-radius: 50%;
   background: var(--ok);
-  box-shadow: 0 0 0 3px var(--ok-bg);
 }
 
 .stamp.stale .dot {
   background: var(--caution);
-  box-shadow: 0 0 0 3px var(--caution-bg);
 }
 
 .notice {
-  margin: 0 0 12px;
-  padding: 10px 12px;
-  border-radius: 12px;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
   font-size: var(--fs-callout);
+  line-height: 1.5;
   background: var(--caution-bg);
   color: var(--caution-ink);
 }
@@ -318,5 +343,14 @@ function locate() {
 .notice.danger {
   background: var(--danger-bg);
   color: var(--danger-ink);
+}
+
+.notice .btn-primary {
+  display: flex;
+  margin-top: 10px;
+}
+
+.notice .btn-primary:disabled {
+  opacity: 0.5;
 }
 </style>

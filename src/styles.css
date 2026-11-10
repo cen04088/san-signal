@@ -1,73 +1,69 @@
-/* ── 색 ──────────────────────────────────────────────
-   신호 색(--ok/--caution/--danger)은 지도 마커(MapView COLORS)와 같은 값.
-   *-bg는 옅은 바탕, *-ink는 그 바탕 위 글자, *-text는 흰 카드 위 글자. */
+/* ── 디자인 방향 ─────────────────────────────────────
+   해외 앱 레퍼런스: Uber(지도 + 바텀 시트 앱). 그대로 옮긴 것이 아니라 원칙만 빌려 왔다.
+   - 화면은 흑백 두 색. 색은 신호(좋음·주의·위험)에만 쓴다. 그래서 신호가 가장 먼저 보인다.
+   - 누르는 것은 모두 알약 모양(999px), 담는 상자는 16px. 그림자는 지도 위에 뜬 것에만.
+   - 제목은 굵게(700), 자간은 건드리지 않는다.
+   신호 색(--ok/--caution/--danger)은 지도 마커(MapView 팔레트)와 같은 값.
+   *-bg는 옅은 바탕, *-ink는 그 바탕 위 글자, *-text는 흰 바탕 위 글자. */
 :root {
   color-scheme: light dark;
 
-  --bg: #f2f4f0;
+  --bg: #ffffff;
   --surface: #ffffff;
-  --surface-2: #f6f7f4;
-  --ink: #15211a;
-  --ink-2: #46544b;
-  --ink-3: #616e66;
-  --line: #e1e6df;
-  --brand: #1f6b47;
+  --surface-2: #f3f3f3;
+  --soft: #efefef;
+  --pressed: #e2e2e2;
+  --ink: #141414;
+  --ink-2: #545454;
+  --ink-3: #666666; /* 회색 칸(#efefef) 위에서도 4.5:1 이상 */
+  --line: #e6e6e6;
+  --brand: #141414;
   --on-ink: #ffffff;
-  --housing: #0b130e;
+  --housing: #141414;
+  --housing-2: #2b2b2b;
 
   --ok: #1f9d55;
   --caution: #e0a100;
   --danger: #d9423b;
-  --ok-bg: #e4f3ea;
-  --caution-bg: #fcf2d4;
-  --danger-bg: #fbe6e4;
-  --ok-ink: #10613a;
-  --caution-ink: #6b4e00;
+  --ok-bg: #e7f5ec;
+  --caution-bg: #fcf3d6;
+  --danger-bg: #fcebea;
+  --ok-ink: #0f5f37;
+  --caution-ink: #634800;
   --danger-ink: #8a201b;
+  --ok-text: #157a41;
   --caution-text: #8a6400;
   --danger-text: #b2302a;
 
-  --trail: #1f6b47;
+  --trail: #141414;
   --risk: #e07a00;
-  --closed: #6b746e;
-  --risk-bg: #fff3e3;
-  --risk-ink: #6b3d00;
-  --risk-ink-2: #92621f;
-  --warn-text: #b35f00;
-  --night: #5b6f94;
-  --night-bg: #e6ebf3;
-  --night-ink: #2a3a55;
+  --closed: #8a8a8a;
+  --warn-text: #a65800;
 
-  /* 재질: 패널처럼 큰 면은 두껍게(불투명·강한 흐림), 지도 위 작은 조각은 얇게 */
-  --material: rgba(242, 244, 240, 0.9);
-  --material-thin: rgba(255, 255, 255, 0.74);
-  --edge-light: rgba(255, 255, 255, 0.7);
-  --shadow-sm: 0 1px 2px rgba(21, 33, 26, 0.08), 0 4px 14px rgba(21, 33, 26, 0.08);
-  --shadow-lg: 0 2px 6px rgba(21, 33, 26, 0.08), 0 18px 48px rgba(21, 33, 26, 0.18);
+  /* 지도 위에 뜬 것만 그림자를 쓴다 (Uber의 떠 있는 알약 버튼) */
+  --material: #ffffff;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.16);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.16);
+  --shadow-sheet: 0 -2px 16px rgba(0, 0, 0, 0.12);
 
-  /* ── 글자: 크기마다 자간·행간을 따로 (큰 글자는 좁게, 작은 글자는 살짝 넓게) ── */
-  --fs-large: 1.75rem;
+  /* ── 글자: 바깥에서 햇빛 아래 보는 앱이라 본문을 15px로 조금 키웠다 ── */
+  --fs-large: 1.875rem;
   --fs-title: 1.5rem;
-  --fs-title2: 1.1875rem;
-  --fs-headline: 1rem;
-  --fs-body: 0.875rem;
-  --fs-callout: 0.8125rem;
-  --fs-caption: 0.75rem;
-  --fs-footnote: 0.6875rem;
-  --tr-large: -0.03em;
-  --tr-title: -0.025em;
-  --tr-title2: -0.02em;
-  --tr-headline: -0.012em;
-  --tr-caption: 0.01em;
-  --tr-footnote: 0.02em;
+  --fs-title2: 1.25rem;
+  --fs-headline: 1.0625rem;
+  --fs-body: 0.9375rem;
+  --fs-callout: 0.875rem;
+  --fs-caption: 0.8125rem;
+  --fs-footnote: 0.75rem;
 
-  --radius: 14px;
+  --radius: 16px;
+  --pill: 999px;
   --panel-w: 420px;
   --gap: 12px;
   --pad: 16px;
   --press: transform 100ms ease-out;
 
-  /* 한글은 시스템 글꼴(윈도 맑은 고딕)의 굵기 단계가 적어 Pretendard를 쓴다. 없으면 시스템 글꼴로. */
+  /* Pretendard는 main.js에서 앱과 함께 불러온다. 못 불러오면 시스템 글꼴로. */
   font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
   font-size: 100%;
   line-height: 1.55;
@@ -80,15 +76,19 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f1512;
-    --surface: #18201b;
-    --surface-2: #1d2620;
-    --ink: #e7ede9;
-    --ink-2: #b3bfb7;
-    --ink-3: #8a978f;
-    --line: #29342d;
-    --brand: #5cc48d;
-    --on-ink: #0f1512;
+    --bg: #141414;
+    --surface: #1f1f1f;
+    --surface-2: #1f1f1f;
+    --soft: #2a2a2a;
+    --pressed: #363636;
+    --ink: #f2f2f2;
+    --ink-2: #bdbdbd;
+    --ink-3: #959595;
+    --line: #2c2c2c;
+    --brand: #f2f2f2;
+    --on-ink: #141414;
+    --housing: #0a0a0a;
+    --housing-2: #262626;
 
     --ok: #34b46a;
     --caution: #f0b429;
@@ -99,25 +99,19 @@
     --ok-ink: #8fe0b0;
     --caution-ink: #f5d37a;
     --danger-ink: #ffaaa3;
+    --ok-text: #6fd29a;
     --caution-text: #f0c24b;
     --danger-text: #ff8a82;
 
-    --trail: #5cc48d;
+    --trail: #f2f2f2;
     --risk: #ff9a2e;
-    --closed: #98a39c;
-    --risk-bg: rgba(224, 122, 0, 0.16);
-    --risk-ink: #ffc27a;
-    --risk-ink-2: #d9a35e;
+    --closed: #8f8f8f;
     --warn-text: #ffb057;
-    --night: #8ea3cc;
-    --night-bg: rgba(91, 111, 148, 0.24);
-    --night-ink: #c6d2ea;
 
-    --material: rgba(17, 23, 20, 0.86);
-    --material-thin: rgba(30, 38, 33, 0.72);
-    --edge-light: rgba(255, 255, 255, 0.08);
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.3);
-    --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.4), 0 18px 48px rgba(0, 0, 0, 0.5);
+    --material: #141414;
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.55);
+    --shadow-sheet: 0 -2px 16px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -155,12 +149,62 @@ input {
 }
 
 a {
-  color: var(--brand);
+  color: var(--ink);
+  text-underline-offset: 2px;
 }
 
 :focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
+}
+
+/* 화면에는 안 보이고 화면 읽기 프로그램만 읽는 글 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 알약 버튼 두 가지: 검은 기본(.btn-primary), 회색 보조(.btn-soft) */
+.btn-primary,
+.btn-soft {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--pill);
+  font-size: var(--fs-callout);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: var(--press), background-color 120ms ease;
+}
+
+.btn-primary {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+
+.btn-soft {
+  background: var(--soft);
+  color: var(--ink);
+}
+
+.btn-primary:active,
+.btn-soft:active {
+  transform: scale(0.97);
+}
+
+.btn-soft:active {
+  background: var(--pressed);
 }
 
 /* ── 화면 전환: 상세는 오른쪽에서 들어오고, 목록은 왼쪽에서 돌아온다 ── */
@@ -195,15 +239,19 @@ a {
 /* ── Leaflet ── */
 .leaflet-container {
   font-family: inherit;
-  background: #e9ece6;
+  background: #ececec;
+}
+
+/* 지도 타일은 색을 빼서 회색조로 둔다. 화면에서 색이 있는 것은 신호 점과 등산로뿐이다. */
+.leaflet-tile-pane {
+  filter: saturate(0.25) brightness(1.03) contrast(0.95);
 }
 
 .leaflet-tooltip.mountain-tip {
-  font-weight: 650;
+  font-weight: 600;
   font-size: var(--fs-caption);
-  letter-spacing: var(--tr-caption);
-  padding: 3px 8px;
-  border-radius: 8px;
+  padding: 4px 10px;
+  border-radius: var(--pill);
   border: none;
   background: var(--surface);
   color: var(--ink);
@@ -222,11 +270,11 @@ a {
 }
 
 .leaflet-popup-content-wrapper {
-  border-radius: 14px;
+  border-radius: var(--radius);
 }
 
 .leaflet-popup-content {
-  margin: 11px 14px;
+  margin: 12px 16px;
   font-size: var(--fs-callout);
   line-height: 1.5;
 }
@@ -239,29 +287,30 @@ a {
 .pp.ctrl { color: var(--danger-text); }
 .pp.risk { color: var(--warn-text); }
 
+/* 확대·축소: 지도 위에 뜬 흰 알약 */
 .leaflet-bar {
   border: 0 !important;
-  border-radius: 12px !important;
+  border-radius: var(--pill) !important;
   overflow: hidden;
   box-shadow: var(--shadow-sm) !important;
 }
 
 .leaflet-bar a,
 .leaflet-bar a:hover {
-  width: 34px !important;
-  height: 34px !important;
-  line-height: 34px !important;
-  background: var(--material-thin);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  backdrop-filter: blur(16px) saturate(180%);
+  width: 40px !important;
+  height: 40px !important;
+  line-height: 40px !important;
+  background: var(--surface);
   color: var(--ink);
   border-bottom-color: var(--line) !important;
 }
 
+.leaflet-bar a:active {
+  background: var(--soft);
+}
+
 .leaflet-control-attribution {
-  background: var(--material-thin) !important;
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  background: var(--surface) !important;
   color: var(--ink-3);
   border-radius: 8px 0 0 0;
 }
@@ -283,12 +332,12 @@ a {
 
 @media (prefers-color-scheme: dark) {
   .leaflet-container {
-    background: #1a201c;
+    background: #1a1a1a;
   }
 
-  /* OSM 지도 타일을 어둡게: 밝기를 뒤집고 색상은 되돌린다 */
+  /* OSM 지도 타일을 어둡게: 밝기를 뒤집고 색상은 되돌린 뒤 회색조로 */
   .leaflet-tile-pane {
-    filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.86) saturate(0.55);
+    filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.88) saturate(0.25);
   }
 }
 
@@ -306,17 +355,9 @@ a {
   }
 }
 
-@media (prefers-reduced-transparency: reduce) {
-  :root {
-    --material: var(--bg);
-    --material-thin: var(--surface);
-  }
-}
-
 @media (prefers-contrast: more) {
   :root {
-    --material: var(--bg);
-    --material-thin: var(--surface);
     --line: var(--ink-3);
+    --ink-2: var(--ink);
   }
 }

@@ -17,25 +17,26 @@ const props = defineProps({
 const emit = defineEmits(['select'])
 
 // Leaflet SVG 속성에는 CSS 변수를 못 쓰므로 hex로 둔다 (styles.css와 같은 값)
+// 등산로는 Uber의 경로선처럼 검은 선(어두운 화면에서는 흰 선)으로 그리고, 색은 위험·통제에만 쓴다
 const LIGHT = {
   signal: ['#1f9d55', '#e0a100', '#d9423b'],
-  noData: '#9aa59e',
+  noData: '#9a9a9a',
   ring: '#ffffff',
-  activeRing: '#15211a',
-  trail: '#1f6b47',
+  activeRing: '#141414',
+  trail: '#141414',
   risk: '#e07a00',
   ctrl: '#d9423b',
-  closed: '#6b746e',
+  closed: '#8a8a8a',
 }
 const DARK = {
   signal: ['#34b46a', '#f0b429', '#ef5b52'],
-  noData: '#6f7a73',
-  ring: '#0f1512',
+  noData: '#6f6f6f',
+  ring: '#141414',
   activeRing: '#ffffff',
-  trail: '#5cc48d',
+  trail: '#f2f2f2',
   risk: '#ff9a2e',
   ctrl: '#ef5b52',
-  closed: '#98a39c',
+  closed: '#8f8f8f',
 }
 const KOREA = [[33.0, 125.0], [38.7, 129.7]]
 const EDGE = 24 // 가려지는 영역 밖으로 더 띄울 여백
@@ -113,12 +114,32 @@ function drawMarkers() {
   markerLayer.clearLayers()
   markers.clear()
   for (const m of props.mountains) {
-    const marker = L.circleMarker([m.lat, m.lng], styleFor(m.id))
+    // 점을 직접 누르면 지도 click으로 번지지 않게 한다 (아래 nearestTap과 겹치지 않도록)
+    const marker = L.circleMarker([m.lat, m.lng], { ...styleFor(m.id), bubblingMouseEvents: false })
       .bindTooltip(m.name, { direction: 'top', offset: [0, -8], className: 'mountain-tip' })
       .on('click', () => emit('select', m.id))
     marker.addTo(markerLayer)
     markers.set(m.id, marker)
   }
+}
+
+// 산 점은 지름 14px라 손가락으로 정확히 누르기 어렵다.
+// 점 밖을 눌러도 이 거리 안에 산이 있으면 가장 가까운 산을 고른다.
+const TAP_SLOP = { touch: 24, mouse: 10 }
+
+function nearestTap(e) {
+  const slop = props.desktop ? TAP_SLOP.mouse : TAP_SLOP.touch
+  let best = null
+  let bestD = slop
+  for (const m of props.mountains) {
+    const p = map.latLngToContainerPoint([m.lat, m.lng])
+    const d = p.distanceTo(e.containerPoint)
+    if (d <= bestD) {
+      best = m
+      bestD = d
+    }
+  }
+  if (best) emit('select', best.id)
 }
 
 function restyle() {
@@ -132,7 +153,7 @@ function segmentStyle(s) {
   if (s.closed) return { color: palette.closed, weight: 3, dashArray: '4 6', opacity: 0.9 }
   if (s.ctrl) return { color: palette.ctrl, weight: 3, dashArray: '6 5', opacity: 0.95 }
   if (s.risk) return { color: palette.risk, weight: 4, opacity: 0.95 }
-  return { color: palette.trail, weight: 3, opacity: 0.85 }
+  return { color: palette.trail, weight: 3, opacity: 0.8 }
 }
 
 function escapeHtml(text) {
@@ -145,7 +166,7 @@ function popupFor(s) {
   if (s.km) facts.push(`${s.km}km`)
   if (s.up) facts.push(`오르막 ${s.up}분`)
   if (s.dn) facts.push(`내리막 ${s.dn}분`)
-  if (facts.length) rows.push(facts.join(' · '))
+  if (facts.length) rows.push(facts.join(', '))
   if (s.closed) rows.push('<span class="pp closed">폐쇄 구간</span>')
   if (s.ctrl) rows.push('<span class="pp ctrl">통제 구간</span>')
   if (s.risk) rows.push(`<span class="pp risk">위험: ${escapeHtml(s.risk)}</span>`)
@@ -163,7 +184,7 @@ function drawTrail(fly = true) {
   for (const s of segments) {
     for (const encoded of s.p) {
       const latlngs = decodePolyline(encoded)
-      L.polyline(latlngs, segmentStyle(s)).bindPopup(popupFor(s)).addTo(trailLayer)
+      L.polyline(latlngs, { ...segmentStyle(s), bubblingMouseEvents: false }).bindPopup(popupFor(s)).addTo(trailLayer)
       latlngs.forEach((p) => bounds.extend(p))
     }
   }
@@ -186,6 +207,19 @@ function onScheme() {
   if (props.selectedId) drawTrail(false)
 }
 
+// 데스크톱: 확대 버튼 + 오른쪽 아래 출처. 휴대폰: 두 손가락 확대, 시트가 아래를 덮으므로 출처는 위로.
+// 창 크기가 바뀌어 화면 형태가 달라지면 다시 놓는다.
+let zoomControl = null
+let attribution = null
+function placeControls() {
+  zoomControl?.remove()
+  attribution?.remove()
+  zoomControl = props.desktop ? L.control.zoom({ position: 'topright' }).addTo(map) : null
+  attribution = L.control.attribution({ position: props.desktop ? 'bottomright' : 'topright', prefix: false })
+    .addAttribution('&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>')
+    .addTo(map)
+}
+
 let resizeObserver
 onMounted(() => {
   map = markRaw(L.map(el.value, {
@@ -197,16 +231,13 @@ onMounted(() => {
     maxBounds: [[18, 108], [48, 146]],
   }))
   map.setView([36.2, 127.8], 7) // 크기를 알기 전 임시 위치
-  if (props.desktop) L.control.zoom({ position: 'topright' }).addTo(map)
-  // 휴대폰에서는 시트가 아래를 덮으므로 출처 표시를 위로 올린다
-  L.control.attribution({ position: props.desktop ? 'bottomright' : 'topright', prefix: false })
-    .addAttribution('&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>')
-    .addTo(map)
+  placeControls()
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 17 }).addTo(map)
   trailLayer = markRaw(L.layerGroup().addTo(map))
   markerLayer = markRaw(L.layerGroup().addTo(map))
   userLayer = markRaw(L.layerGroup().addTo(map))
   drawMarkers()
+  map.on('click', nearestTap)
   if (props.selectedId) drawTrail()
   else moveTo(L.latLngBounds(KOREA), undefined, false)
   resizeObserver = new ResizeObserver(() => {
@@ -240,6 +271,7 @@ watch(() => props.selectedId, (id, old) => {
 })
 watch(() => props.trail, () => map && props.selectedId && drawTrail())
 watch(() => props.userPos, () => map && drawUser())
+watch(() => props.desktop, () => map && placeControls())
 </script>
 
 <template>
@@ -262,23 +294,22 @@ watch(() => props.userPos, () => map && drawUser())
   inset: 0;
 }
 
-/* 지도 위 작은 조각: 얇은 재질 */
+/* 지도 위에 뜬 흰 알약 */
 .legend {
   position: absolute;
-  top: calc(10px + env(safe-area-inset-top));
-  left: 10px;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 12px;
   z-index: 500;
   display: flex;
-  gap: 10px;
-  padding: 6px 11px;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+  padding: 0 14px;
   font-size: var(--fs-caption);
-  font-weight: 650;
-  letter-spacing: var(--tr-caption);
+  font-weight: 600;
   color: var(--ink);
-  background: var(--material-thin);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  backdrop-filter: blur(16px) saturate(180%);
-  border-radius: 12px;
+  background: var(--surface);
+  border-radius: var(--pill);
   box-shadow: var(--shadow-sm);
   pointer-events: none;
 }
@@ -294,14 +325,13 @@ watch(() => props.userPos, () => map && drawUser())
 .legend span {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
 }
 
 .pt {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px rgba(0, 0, 0, 0.1);
 }
 
 .pt.ok { background: var(--ok); }

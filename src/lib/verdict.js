@@ -115,6 +115,7 @@ export function sunFor(m, now) {
     ...today,
     nextSunrise: now > today.sunset ? tomorrow.sunrise : today.sunrise,
     latestStart,
+    startPassed: now > latestStart,
     walk,
     night,
     minutesLeft: Math.round((today.sunset - now) / 60e3),
@@ -147,8 +148,12 @@ export function evaluate(m, { snapshot, stationNames, now }) {
     if (w.wind >= 14) add(DANGER, `강풍 ${w.wind.toFixed(1)}m/s, 능선에서 넘어지거나 물건이 떨어질 수 있어요`, SOURCES.weather)
     else if (w.wind >= 8) add(CAUTION, `바람이 강해요 (${w.wind.toFixed(1)}m/s)`, SOURCES.weather)
     else if (w.windMax >= 14) add(CAUTION, `근처 관측소 일부에 강풍 (최대 ${w.windMax.toFixed(1)}m/s)`, SOURCES.weather)
-    if (w.rn >= 10) add(DANGER, `강한 비 ${w.rn}mm, 계곡이 불어나고 길이 미끄러워요`, SOURCES.weather)
-    else if (w.rn > 0) add(CAUTION, `비가 오고 있어요 (${w.rn}mm)`, SOURCES.weather)
+    // 강수(rn)는 지금 내리는 비가 아니라 쌓인 값이다 (0.5mm 단위, 습도 30%대 관측소에도 찍힌다).
+    // 습도가 높을 때만 '지금 비가 온다'고 말한다.
+    const raining = w.hm != null && w.hm >= 90
+    if (w.rn >= 10) add(DANGER, `강수 ${w.rn}mm, 계곡이 불어나고 길이 미끄러워요`, SOURCES.weather)
+    else if (w.rn > 0 && raining) add(CAUTION, `비가 오고 있어요 (강수 ${w.rn}mm)`, SOURCES.weather)
+    else if (w.rn > 0) add(CAUTION, `최근 비 ${w.rn}mm, 길이 젖어 있을 수 있어요`, SOURCES.weather)
     else if (w.rnMax >= 10) add(CAUTION, `근처 관측소 일부에 강한 비 (최대 ${w.rnMax}mm)`, SOURCES.weather)
     else if (w.rnMax > 0) add(OK, `근처 관측소 일부에 약한 비 (최대 ${w.rnMax}mm)`, SOURCES.weather)
     if (feels != null && feels <= -25) add(DANGER, `체감온도 ${feels.toFixed(0)}℃, 저체온증 위험`, SOURCES.weather)
@@ -161,8 +166,8 @@ export function evaluate(m, { snapshot, stationNames, now }) {
   const sun = sunFor(m, now)
   if (!sun.night) {
     if (sun.minutesLeft < 30) add(DANGER, `해 지기까지 ${sun.minutesLeft}분, 지금 오르면 어두워진 뒤에 내려와요`, SOURCES.sun)
-    else if (now > sun.latestStart) {
-      add(CAUTION, `지금 출발하면 하산 전에 해가 질 수 있어요 (일반 코스 ${hoursText(sun.walk)}시간 기준)`, SOURCES.sun)
+    else if (sun.startPassed) {
+      add(CAUTION, `지금 출발하면 해 지기 전에 내려오기 어려워요 (코스 ${hoursText(sun.walk)}시간)`, SOURCES.sun)
     }
   }
 
