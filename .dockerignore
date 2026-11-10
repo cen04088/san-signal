@@ -1,0 +1,11 @@
+node_modules
+dist
+public/live
+scripts/.cache
+scripts/match_report.txt
+.git
+.github
+docs
+*.log
+.env
+.env.*

@@ -1,4 +1,4 @@
-"""실시간 산림 데이터 스냅샷(public/live/snapshot.json). GitHub Actions가 매시간 실행한다.
+"""실시간 산림 데이터 스냅샷(public/live/snapshot.json). GitHub Actions와 Railway 서버가 매시간 실행한다.
 
   1. 산림청 국립산림과학원_산불위험예보정보  : 시군구 230곳의 산불위험지수(평균·최대)
   2. 산림청_산사태예측정보                  : 최근 발령된 산사태 주의보·경보(시군구)
@@ -10,13 +10,15 @@ import datetime as dt
 import json
 import os
 import traceback
+from pathlib import Path
 
 from common import (
     FIRE_SIGUNGU_URL, KST, LANDSLIDE_URL, MOUNTAIN_WEATHER_URL, ROOT,
     fetch_items, now_kst, num, region_key, write_json,
 )
 
-LIVE_PATH = ROOT / "public" / "live" / "snapshot.json"
+# Railway 서버(scripts/serve.py)는 LIVE_PATH로 저장 위치를 바꿔 실행한다.
+LIVE_PATH = Path(os.environ.get("LIVE_PATH") or ROOT / "public" / "live" / "snapshot.json")
 LANDSLIDE_ACTIVE_HOURS = 3  # 산사태예측은 매시 발령분만 올라온다 → 최근 3시간 안의 발령을 '진행 중'으로 본다
 
 

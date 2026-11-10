@@ -2,7 +2,8 @@
 
 오늘, 이 산 가도 될까? 산림청 공공데이터 5종으로 전국 138개 산의 산행 안전을 좋음·주의·위험 신호등으로 보여주는 웹 서비스입니다.
 
-- 서비스 주소: https://cen04088.github.io/san-signal/
+- 서비스 주소: https://cen04088.github.io/san-signal/ (GitHub Pages)
+- 같은 서비스를 Railway에도 올려 두었습니다: https://san-signal-production.up.railway.app
 - 산 하나를 바로 열기: `https://cen04088.github.io/san-signal/#m004` (북한산)
 
 ## 무엇을 하나요
@@ -51,6 +52,12 @@ GitHub Actions (매시 7분)
 - 공공데이터포털 API는 브라우저에서 직접 부를 수 없어서(CORS) 수집은 Actions가 맡고, 화면은 정적 파일만 읽습니다.
 - API 하나가 실패하면 직전 값을 '지연' 표시와 함께 이어서 씁니다. 데이터가 3시간 넘게 오래되면 화면 상단에 알립니다.
 - 인증키는 GitHub Secrets(`PUBLIC_SERVICE_KEY`)에만 있고 저장소와 화면에는 없습니다.
+
+Railway에서는 `Dockerfile`로 사이트를 빌드하고, `scripts/serve.py`가 정적 파일을 내주면서 매시 7분에 `fetch_live.py`를 직접 돌려 `live/snapshot.json`만 바꿔 끼웁니다. 인증키는 Railway 서비스 변수 `PUBLIC_SERVICE_KEY`에 둡니다.
+
+```bash
+railway up --service san-signal   # 현재 폴더를 Railway에 올린다
+```
 
 ## 판정 기준
 
