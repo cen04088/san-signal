@@ -251,7 +251,7 @@ const noTrailText = computed(() => {
     <section class="block" v-if="m.description">
       <h2>산 소개</h2>
       <p class="desc">{{ m.description }}</p>
-      <p class="src-line">{{ m.description_source === 'olla' ? '이전 프로젝트(올라)에서 정리한 자료' : '산림청 산정보 서비스' }}</p>
+      <p v-if="m.description_source !== 'olla'" class="src-line">산림청 산정보 서비스</p>
     </section>
 
     <p class="disclaimer">
