@@ -49,6 +49,9 @@ let map
 let markerLayer
 let trailLayer
 let userLayer
+// 산 원은 등산로와 다른 층(pane)에 따로 그린다. 같은 SVG에 그리면 산을 고를 때 새로 그린
+// 등산로가 원 위를 덮어서, 원을 눌러도 등산로 선이 먼저 눌린다.
+let markerRenderer
 const markers = new Map()
 
 function colorFor(id) {
@@ -115,7 +118,7 @@ function drawMarkers() {
   markers.clear()
   for (const m of props.mountains) {
     // 점을 직접 누르면 지도 click으로 번지지 않게 한다 (아래 nearestTap과 겹치지 않도록)
-    const marker = L.circleMarker([m.lat, m.lng], { ...styleFor(m.id), bubblingMouseEvents: false })
+    const marker = L.circleMarker([m.lat, m.lng], { ...styleFor(m.id), renderer: markerRenderer, bubblingMouseEvents: false })
       .bindTooltip(m.name, { direction: 'top', offset: [0, -8], className: 'mountain-tip' })
       .on('click', () => emit('select', m.id))
     marker.addTo(markerLayer)
@@ -197,7 +200,7 @@ function drawUser() {
   userLayer.clearLayers()
   if (!props.userPos) return
   L.circleMarker([props.userPos.lat, props.userPos.lng], {
-    radius: 6, color: '#ffffff', weight: 2, fillColor: '#2f6fed', fillOpacity: 1,
+    radius: 6, color: '#ffffff', weight: 2, fillColor: '#2f6fed', fillOpacity: 1, renderer: markerRenderer,
   }).bindTooltip('내 위치', { direction: 'top', className: 'mountain-tip' }).addTo(userLayer)
 }
 
@@ -233,6 +236,12 @@ onMounted(() => {
   map.setView([36.2, 127.8], 7) // 크기를 알기 전 임시 위치
   placeControls()
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 17 }).addTo(map)
+  // 산 원 전용 층: 등산로(overlayPane, 400) 위, 툴팁·팝업(650·700) 아래.
+  // 층 자체는 클릭을 통과시키고 원(path)만 눌리게 해서, 원 사이 빈 곳을 누르면 아래 등산로가 눌린다.
+  const pane = map.createPane('mountains')
+  pane.style.zIndex = 450
+  pane.style.pointerEvents = 'none'
+  markerRenderer = markRaw(L.svg({ pane: 'mountains' }))
   trailLayer = markRaw(L.layerGroup().addTo(map))
   markerLayer = markRaw(L.layerGroup().addTo(map))
   userLayer = markRaw(L.layerGroup().addTo(map))

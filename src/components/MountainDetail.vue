@@ -240,7 +240,6 @@ const noTrailText = computed(() => {
             <span>{{ text }}</span><small>{{ n }}구간</small>
           </li>
         </ul>
-        <p class="hint">지도에서 등산로 선을 누르면 구간 이름, 소요 시간, 위험 정보가 나와요.</p>
       </template>
       <template v-else>
         <p class="hint">{{ noTrailText }}</p>
